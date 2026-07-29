@@ -2,7 +2,13 @@
 // Uses /catalogue/search-index deliberately, not plain /catalogue — the
 // latter embeds every product's image as base64 and can take 20+ seconds
 // against the real catalogue; search-index returns the same products
-// without images, in a fraction of the size and time.
+// without images, in a fraction of the size and time. Photos come from a
+// second source: Supabase's own `products` table (populated ahead of time
+// by scripts/sync-products.mjs from the same underlying MongoDB catalogue,
+// with each image already uploaded to Storage) — joined in here by
+// item_id/external_id, since the live API itself has no fast way to get
+// an image for 762 products in one request.
+import { createClient } from "@supabase/supabase-js";
 import BuyButton from "@/components/BuyButton";
 import ShopAssistant from "@/components/ShopAssistant";
 import KuromiMascot from "@/components/KuromiMascot";
@@ -19,11 +25,28 @@ async function getProducts() {
   return res.json();
 }
 
+async function getProductImages() {
+  const supabase = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+  );
+  const { data, error } = await supabase.from("products").select("external_id, image_url");
+  if (error || !data) return new Map();
+  return new Map(data.map((row) => [row.external_id, row.image_url]));
+}
+
 export default async function Home() {
   let products = [];
   let error = null;
   try {
-    products = await getProducts();
+    const [fetchedProducts, imagesByItemId] = await Promise.all([
+      getProducts(),
+      getProductImages(),
+    ]);
+    products = fetchedProducts.map((product) => ({
+      ...product,
+      image_url: imagesByItemId.get(product.item_id) ?? null,
+    }));
   } catch (err) {
     error = err.message;
   }
@@ -55,6 +78,19 @@ export default async function Home() {
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
         {products.map((product) => (
           <div key={product.item_id} className="kuromi-card p-4 flex flex-col gap-1.5">
+            <div className="aspect-square w-full rounded-xl border-2 border-[var(--ink)] bg-[var(--pink-light)] overflow-hidden mb-1 flex items-center justify-center">
+              {product.image_url ? (
+                // eslint-disable-next-line @next/next/no-img-element -- external Supabase Storage URLs, not worth configuring next/image for a hackathon catalogue
+                <img
+                  src={product.image_url}
+                  alt={product.product_name}
+                  className="w-full h-full object-cover"
+                  loading="lazy"
+                />
+              ) : (
+                <KuromiMascot size={56} />
+              )}
+            </div>
             <span className="kuromi-badge w-fit">{product.category}</span>
             <h3 className="font-heading font-bold leading-snug">{product.product_name}</h3>
             <p className="kuromi-price font-extrabold text-lg mb-1">
