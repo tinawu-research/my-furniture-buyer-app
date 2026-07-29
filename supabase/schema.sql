@@ -44,9 +44,8 @@ create policy "Users can view their own profile"
   on profiles for select
   using (auth.uid() = id);
 
-create policy "Anyone signed in can view products"
+create policy "Anyone can view products"
   on products for select
-  to authenticated
   using (true);
 
 create policy "Users can view their own orders"

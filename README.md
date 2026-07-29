@@ -25,6 +25,6 @@ See [CLAUDE.md](./CLAUDE.md) for the full project summary, tech stack, and folde
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000). Sign up with any email/password on the `/login` page (Supabase will send a confirmation email unless you disable that in Authentication > Providers > Email in the Supabase dashboard — handy to turn off for a quick demo).
+Open [http://localhost:3000](http://localhost:3000) — this is the product catalogue, visible to anyone. Sign up with any email/password on the `/login` page (Supabase will send a confirmation email unless you disable that in Authentication > Providers > Email in the Supabase dashboard — handy to turn off for a quick demo) to unlock placing orders.
 
 Every new user starts with a $1000 budget (set in `supabase/schema.sql`, table `profiles`).

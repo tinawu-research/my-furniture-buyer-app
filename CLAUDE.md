@@ -2,11 +2,16 @@
 
 ## What this is
 
-A Day 1 hackathon web app for a furniture shop. A user logs in, browses a
-product catalogue, and places orders — each order is checked against that
-user's budget so they can't overspend. The user (Tina) has no coding
-background; Claude is doing all the implementation, so prioritize working,
-simple, well-explained code over cleverness.
+A Day 1 hackathon web app for a furniture shop. Anyone can browse the
+product catalogue on the home page; logging in lets a user place orders,
+each checked against that user's budget so they can't overspend. The user
+(Tina) has no coding background; Claude is doing all the implementation, so
+prioritize working, simple, well-explained code over cleverness.
+
+Products are currently demo/placeholder rows seeded by `supabase/schema.sql`
+— a real product catalogue will replace them in a later step. Because the
+UI reads products from the `products` table rather than hardcoded data, that
+swap won't require code changes.
 
 ## Tech stack (and why)
 
@@ -50,8 +55,11 @@ tutorials/knowledge:
 Auth is **client-side only** via the Supabase JS SDK
 (`supabase.auth.signInWithPassword` / `signUp`), with the session cached in
 the browser (localStorage) and shared through `src/lib/AuthContext.js`.
-Protected pages are wrapped in `<RequireAuth>`, which redirects to `/login`
-if there's no session. There is no server-side session/cookie handling
+The home page is public (anyone can browse products); only `/orders` is
+wrapped in `<RequireAuth>`, which redirects to `/login` if there's no
+session — the home page instead swaps its "place order" button for a
+"log in to order" link when there's no user. There is no server-side
+session/cookie handling
 (no `proxy.js`, no `@supabase/ssr`) — that's a reasonable thing to add later
 if this grows past the hackathon, but it's extra complexity this app doesn't
 need yet.
@@ -67,7 +75,8 @@ is the one part of the app where "don't trust the client" actually matters.
 - `profiles` — one row per user, holds `budget` (defaults to 1000, set by a
   Postgres trigger on signup). Row Level Security (RLS) restricts each user
   to their own row.
-- `products` — shop catalogue, readable by any authenticated user.
+- `products` — shop catalogue, readable by anyone (no login required to
+  browse). Currently seeded with placeholder demo rows.
 - `orders` — one row per placed order (`user_id`, `total`). RLS restricts
   reads/writes to the owning user.
 - `order_items` — line items per order (`product_id`, `quantity`, `price`
@@ -86,10 +95,9 @@ my-furniture-buyer-app/
   .env.local.example         # template for Supabase URL + anon key
   src/
     app/
-      page.js                 # homepage
+      page.js                 # homepage: public product catalogue, cart, place order
       login/page.js           # login / signup form
-      catalogue/page.js       # browse products, build a cart, place an order
-      orders/page.js          # past orders + budget tracker
+      orders/page.js          # past orders + budget tracker (requires login)
       api/orders/route.js     # POST: server-side budget check + order insert
       layout.js               # wraps everything in <AuthProvider> + <Navbar>
     components/
