@@ -1,6 +1,6 @@
 # Furniture Buyer App
 
-A small web app where a logged-in user can browse a furniture catalogue and place orders against a budget.
+A small web app for a furniture shop: anyone can browse a live product catalogue, and logging in tracks a budget and order history.
 
 See [CLAUDE.md](./CLAUDE.md) for the full project summary, tech stack, and folder structure.
 
@@ -27,6 +27,6 @@ See [CLAUDE.md](./CLAUDE.md) for the full project summary, tech stack, and folde
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) — this is the product catalogue, visible to anyone. Sign up with any email/password on the `/login` page (Supabase will send a confirmation email unless you disable that in Authentication > Providers > Email in the Supabase dashboard — handy to turn off for a quick demo) to unlock placing orders.
+Open [http://localhost:3000](http://localhost:3000) — the home page shows a live catalogue fetched directly from the hackathon's external Product Search API (`EXTERNAL_API_BASE_URL` in `.env.local`; no login or API key needed just to browse it). `/login` still lets you sign up and log in (every new user gets a $1000 budget, set in `supabase/schema.sql`), and `/orders` shows order history — but placing a *new* order isn't wired up on the home page right now, since it switched to the external API's product IDs. See [CLAUDE.md](./CLAUDE.md) for the full picture of how the two halves fit together.
 
-Every new user starts with a $1000 budget (set in `supabase/schema.sql`, table `profiles`).
+`EXTERNAL_API_USER_ID` and `EXTERNAL_API_KEY` in `.env.local` aren't used by anything yet — they're only needed once account-specific calls (checking a balance, placing an order through the external API) get built.

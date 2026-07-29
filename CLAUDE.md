@@ -2,14 +2,28 @@
 
 ## What this is
 
-A Day 1 hackathon web app for a furniture shop. Anyone can browse the
-product catalogue on the home page; logging in lets a user place orders,
-each checked against that user's budget so they can't overspend. The user
-(Tina) has no coding background; Claude is doing all the implementation, so
-prioritize working, simple, well-explained code over cleverness.
+A Day 1 hackathon web app for a furniture shop. The user (Tina) has no
+coding background; Claude is doing all the implementation, so prioritize
+working, simple, well-explained code over cleverness.
 
-Products are real furniture data (762 items) loaded from a MongoDB instance
-provided for the hackathon — see "Catalogue data source" below.
+The app currently has two, not-yet-connected halves:
+
+- **Home page (`/`)** — a live, read-only listing (category/name/price) of
+  762 furniture products, fetched on every request from an external
+  "Product Search API" the hackathon organizers provide (a mock
+  third-party service, separate from this app's own database — see
+  "External Product Search API" below). This is a "Level 2: calling
+  external APIs" exercise.
+- **Login + budget + orders (`/login`, `/orders`, `POST /api/orders`)** —
+  the original self-contained feature: sign up, get a starting budget,
+  place orders against a Supabase-backed copy of the same underlying
+  furniture data (762 items, synced from MongoDB — see "Catalogue data
+  source" below), checked against budget server-side. Still fully working,
+  but currently has no UI entry point since the home page's cart/"place
+  order" flow was removed when it switched to the external API's item IDs
+  (which don't match this system's product UUIDs). Reconnecting the two —
+  e.g. placing orders against the external API's own `/orders` endpoint
+  instead — is a natural next step, not yet done.
 
 ## Tech stack (and why)
 
@@ -63,24 +77,19 @@ confirmation-email flow (and its low free-tier send-rate limit, which broke
 signup entirely during testing) — reasonable for a hackathon demo where
 verifying real email ownership doesn't matter; a production version would
 use real email confirmation instead.
-The home page is public (anyone can browse products); only `/orders` is
-wrapped in `<RequireAuth>`, which redirects to `/login` if there's no
-session — the home page instead swaps its "place order" button for a
-"log in to order" link when there's no user. There is no server-side
-session/cookie handling
-(no `proxy.js`, no `@supabase/ssr`) — that's a reasonable thing to add later
-if this grows past the hackathon, but it's extra complexity this app doesn't
+`/orders` is wrapped in `<RequireAuth>`, which redirects to `/login` if
+there's no session. There is no server-side session/cookie handling (no
+`proxy.js`, no `@supabase/ssr`) — that's a reasonable thing to add later if
+this grows past the hackathon, but it's extra complexity this app doesn't
 need yet.
 
-The one place the server matters is placing an order: the client sends its
-Supabase access token in the `Authorization` header to
+The one place the server matters is placing an order: the client would send
+its Supabase access token in the `Authorization` header to
 `POST /api/orders`, and that route re-checks the budget and re-looks-up
 product prices itself rather than trusting whatever the browser sent. This
-is the one part of the app where "don't trust the client" actually matters.
-The home page also disables the "Place order" button and shows an inline
-warning as soon as the cart exceeds the remaining budget, so the common
-case is caught before a request is even made — but that's a UX nicety, not
-the actual enforcement.
+is the one part of the app where "don't trust the client" actually
+matters — still true and unit-tested, just currently unreachable from any
+page (see "What this is" above).
 
 ## Data model (see `supabase/schema.sql`)
 
@@ -100,7 +109,37 @@ the actual enforcement.
 `profiles.budget - sum(orders.total for that user)` — nothing decrements a
 stored balance, which avoids concurrency/rollback headaches.
 
-## Catalogue data source
+## External Product Search API (Level 2 — powers the home page)
+
+A separate, organizer-run mock third-party API at `EXTERNAL_API_BASE_URL`
+(currently `https://day1.training.cognitivo.com.au`) — not part of this
+app's own infrastructure, and not the same thing as the Supabase
+`products` table below (though it happens to serve the same underlying
+762-item furniture dataset). Relevant endpoints:
+
+- `GET /catalogue/search-index?category=&limit=&skip=` — no auth needed;
+  what `src/app/page.js` calls. Returns `item_id`, `product_name`, `price`,
+  `category`, `colours`, dimensions, `link` — **no image**. Deliberately not
+  `GET /catalogue` (same data, but with every image embedded as base64 —
+  the docs warn this can take 20+ seconds against the full catalogue).
+- `GET /catalogue/{item_id}` / `GET /catalogue/{item_id}/image` — full
+  detail / raw image bytes for one product. Not currently used anywhere.
+- `GET /users/{user_id}`, `POST /orders`, `GET /orders/{user_id}`,
+  `GET /orders/{order_id}/invoice` — need `X-Api-Key` (must match the
+  `user_id`, e.g. `u001`, being queried). `EXTERNAL_API_USER_ID` and
+  `EXTERNAL_API_KEY` env vars are reserved for these but nothing calls them
+  yet — this is the natural next step if "place an order" gets wired back
+  up, this time against the external API instead of `/api/orders`.
+
+`src/app/page.js` is an **async Server Component** (no `"use client"`),
+calling `fetch(..., { cache: "no-store" })` directly — required here:
+without an explicit no-store (or some other dynamic API), Next.js will
+statically prerender this page at *build* time, freezing the catalogue at
+whatever the external API returned during `next build` instead of fetching
+fresh data per request. Confirmed by checking the build output's route
+list: `○ (Static)` vs `ƒ (Dynamic)`.
+
+## Catalogue data source (Supabase's own copy — separate from the above)
 
 `scripts/sync-products.mjs` (run via `npm run sync-products`) is a one-off
 Node script — not part of the running app — that:
@@ -130,8 +169,9 @@ app never connects to Mongo, only to Supabase.
 **Why images live in Storage, not the `products` row:** the first version
 of this script stored each image as base64 text directly in `image_url`.
 That worked, but 762 products averaging ~120KB of image data each made a
-`select *` on `products` — which the home page runs on every load — slow
-and large enough to hit Postgres's statement timeout (confirmed: it failed
+`select *` on `products` — which the home page ran on every load, back
+when it was Supabase-backed rather than the external API — slow and large
+enough to hit Postgres's statement timeout (confirmed: it failed
 consistently with `"canceling statement due to statement timeout"`).
 Uploading images to Storage and keeping only a URL in the row fixed it —
 the same query went from timing out to ~1.3s and ~342KB.
@@ -142,17 +182,17 @@ the same query went from timing out to ~1.3s and ~342KB.
 my-furniture-buyer-app/
   supabase/schema.sql        # run once in the Supabase SQL editor
   scripts/sync-products.mjs  # one-off: loads products from MongoDB (npm run sync-products)
-  .env.local.example         # template for Supabase + Mongo env vars
+  .env.local.example         # template for Supabase + Mongo + external-API env vars
   src/
     app/
-      page.js                 # homepage: public product catalogue, cart, place order
+      page.js                 # homepage: live product listing from the external API (Level 2)
       login/page.js           # login / signup form
       orders/page.js          # past orders + budget tracker (requires login)
-      api/orders/route.js     # POST: server-side budget check + order insert
+      api/orders/route.js     # POST: server-side budget check + order insert (unreachable from UI right now)
+      api/signup/route.js     # POST: creates a Supabase user already-confirmed
       layout.js               # wraps everything in <AuthProvider> + <Navbar>
     components/
       Navbar.js
-      ProductCard.js
       BudgetTracker.js
       RequireAuth.js          # redirects to /login if not authenticated
     lib/
