@@ -69,8 +69,9 @@ function OrdersContent() {
 
       <div className="flex items-baseline justify-between mb-6">
         <span className="text-gray-500">
-          Total spent across {orders.length} order{orders.length === 1 ? "" : "s"} in
-          this app&apos;s own order history
+          {`Total spent across ${orders.length} order${
+            orders.length === 1 ? "" : "s"
+          } in this app's own order history`}
         </span>
         <span className="text-xl font-semibold">
           $
