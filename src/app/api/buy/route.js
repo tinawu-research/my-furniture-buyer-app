@@ -30,38 +30,50 @@ export async function POST(request) {
     );
   }
 
-  const { item_id, quantity } = await request.json();
+  const { item_id, quantity } = await request.json().catch(() => ({}));
   if (!item_id) {
     return Response.json({ error: "Missing item_id" }, { status: 400 });
   }
 
-  const res = await fetch(`${baseUrl}/orders`, {
-    method: "POST",
-    headers: {
-      "X-Api-Key": apiKey,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      user_id: externalUserId,
-      item_id,
-      quantity: quantity ?? 1,
-    }),
-  });
+  // Wrapped so a network failure talking to the external API (it's down,
+  // DNS fails, etc.) returns a clean error instead of an unhandled
+  // exception the client can't parse as JSON.
+  try {
+    const res = await fetch(`${baseUrl}/orders`, {
+      method: "POST",
+      headers: {
+        "X-Api-Key": apiKey,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        user_id: externalUserId,
+        item_id,
+        quantity: quantity ?? 1,
+      }),
+    });
 
-  const body = await res.json().catch(() => ({}));
+    const body = await res.json().catch(() => ({}));
 
-  if (!res.ok) {
-    let message = body.error ?? body.detail ?? `Order failed (status ${res.status}).`;
-    if (res.status === 402) {
-      message = "This order costs more than your remaining balance.";
-    } else if (res.status === 429) {
-      const retryAfter = res.headers.get("Retry-After");
-      message = retryAfter
-        ? `Too many requests — try again in ${retryAfter}s.`
-        : "Too many requests — try again shortly.";
+    if (!res.ok) {
+      let message = body.error ?? body.detail ?? `Order failed (status ${res.status}).`;
+      if (res.status === 402) {
+        message = "Insufficient balance: this order costs more than you have left.";
+      } else if (res.status === 404) {
+        message = "This item is no longer available.";
+      } else if (res.status === 429) {
+        const retryAfter = res.headers.get("Retry-After");
+        message = retryAfter
+          ? `Too many requests — try again in ${retryAfter}s.`
+          : "Too many requests — try again shortly.";
+      }
+      return Response.json({ error: message }, { status: res.status });
     }
-    return Response.json({ error: message }, { status: res.status });
-  }
 
-  return Response.json(body, { status: res.status });
+    return Response.json(body, { status: res.status });
+  } catch {
+    return Response.json(
+      { error: "Couldn't reach the furniture shop's API. Try again shortly." },
+      { status: 502 }
+    );
+  }
 }

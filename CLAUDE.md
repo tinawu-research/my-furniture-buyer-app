@@ -155,10 +155,20 @@ caller has a valid Supabase session (mirroring `/api/orders`'s pattern)
 before calling the external API — neither call is actually
 per-Supabase-account (there's only one `EXTERNAL_API_USER_ID` configured
 for this whole app), but there's no reason to let either route be hit by
-random unauthenticated requests either. `POST /api/buy` also maps the
-external API's error codes to a plain-language message: 402 → over
-balance, 429 → rate-limited (echoes back the `Retry-After` seconds if the
-API sent one).
+random unauthenticated requests either. `POST /api/buy` maps the external
+API's error codes to plain-language messages: 402 → "Insufficient
+balance...", 404 → "This item is no longer available.", 429 →
+rate-limited (echoes back the `Retry-After` seconds if the API sent one).
+Both `/api/buy` (a network failure reaching the external API, or a
+malformed request body) and `BuyButton.js` (a network failure reaching our
+own `/api/buy`) wrap their fetch calls in try/catch so a failure of either
+kind always turns into a clean error message and a re-enabled Buy button —
+never an unhandled exception. Verified all of this by pointing
+`EXTERNAL_API_BASE_URL` at a throwaway local mock server that returns
+402/404/429/200 on command (plus killing it outright to test the
+network-failure path), since the real external API can't be told to fail
+in a specific way on request; reverted `.env.local` back to the real
+values afterward.
 
 `src/app/page.js` is an **async Server Component** (no `"use client"`),
 calling `fetch(..., { cache: "no-store" })` directly — required here:

@@ -14,24 +14,29 @@ export default function BuyButton({ itemId }) {
     setState("buying");
     setError(null);
 
-    const res = await fetch("/api/buy", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${session.access_token}`,
-      },
-      body: JSON.stringify({ item_id: itemId, quantity: 1 }),
-    });
-    const body = await res.json();
+    try {
+      const res = await fetch("/api/buy", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({ item_id: itemId, quantity: 1 }),
+      });
+      const body = await res.json().catch(() => ({}));
 
-    if (!res.ok) {
-      setError(body.error ?? "Something went wrong placing the order.");
+      if (!res.ok) {
+        setError(body.error ?? "Something went wrong placing the order.");
+        setState("error");
+        return;
+      }
+
+      setResult(body);
+      setState("done");
+    } catch {
+      setError("Something went wrong placing the order. Try again.");
       setState("error");
-      return;
     }
-
-    setResult(body);
-    setState("done");
   }
 
   if (!user) {
