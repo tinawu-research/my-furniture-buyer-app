@@ -9,14 +9,12 @@ export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState(null);
-  const [message, setMessage] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const router = useRouter();
 
   async function handleSubmit(e) {
     e.preventDefault();
     setError(null);
-    setMessage(null);
     setSubmitting(true);
 
     if (mode === "login") {
@@ -31,14 +29,25 @@ export default function LoginPage() {
       }
       router.push("/");
     } else {
-      const { error } = await supabase.auth.signUp({ email, password });
+      const signupRes = await fetch("/api/signup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
+      });
+      const signupBody = await signupRes.json();
+      if (!signupRes.ok) {
+        setSubmitting(false);
+        setError(signupBody.error ?? "Something went wrong signing up.");
+        return;
+      }
+
+      const { error } = await supabase.auth.signInWithPassword({ email, password });
       setSubmitting(false);
       if (error) {
         setError(error.message);
         return;
       }
-      setMessage("Account created! Check your email to confirm, then log in.");
-      setMode("login");
+      router.push("/");
     }
   }
 
@@ -72,7 +81,6 @@ export default function LoginPage() {
         </label>
 
         {error && <p className="text-sm text-red-600">{error}</p>}
-        {message && <p className="text-sm text-green-600">{message}</p>}
 
         <button
           type="submit"
@@ -87,7 +95,6 @@ export default function LoginPage() {
         onClick={() => {
           setMode(mode === "login" ? "signup" : "login");
           setError(null);
-          setMessage(null);
         }}
         className="mt-4 text-sm text-gray-600 hover:underline"
       >

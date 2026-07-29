@@ -51,8 +51,18 @@ tutorials/knowledge:
 ## Auth model (deliberately simple for Day 1)
 
 Auth is **client-side only** via the Supabase JS SDK
-(`supabase.auth.signInWithPassword` / `signUp`), with the session cached in
+(`supabase.auth.signInWithPassword` for login), with the session cached in
 the browser (localStorage) and shared through `src/lib/AuthContext.js`.
+
+Sign-up does not use `supabase.auth.signUp()` directly. It goes through
+`POST /api/signup`, a server route that calls
+`supabase.auth.admin.createUser({ ..., email_confirm: true })` with the
+service role key, creating the account already confirmed — then the client
+immediately calls `signInWithPassword`. This sidesteps Supabase's
+confirmation-email flow (and its low free-tier send-rate limit, which broke
+signup entirely during testing) — reasonable for a hackathon demo where
+verifying real email ownership doesn't matter; a production version would
+use real email confirmation instead.
 The home page is public (anyone can browse products); only `/orders` is
 wrapped in `<RequireAuth>`, which redirects to `/login` if there's no
 session — the home page instead swaps its "place order" button for a
