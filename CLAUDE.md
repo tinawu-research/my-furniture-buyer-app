@@ -252,11 +252,12 @@ test (run with explicit sign-off given the ~$2,922 real spend either way)
 
 A chat box on the home page (`src/components/ShopAssistant.js`, logged-in
 only) lets the user type a plain-English request; an LLM agent turns that
-into calls against the same four external-API actions used elsewhere in
-the app (`search_catalogue`, `get_product`, `check_balance`, `place_order`
-— see "External Product Search API" above), applying whatever judgement
-the API itself can't (price comparisons, colour matching, "cheap") over
-the plain results it gets back.
+into calls against four tools: `get_product`, `check_balance`, and
+`place_order` hit the same real external-API actions used elsewhere in the
+app (see "External Product Search API" above); `search_catalogue` is
+different — it's a **Vector RAG** search over Supabase's own synced copy
+of the catalogue, not a live external-API call (see "Vector RAG product
+search" below for why and how).
 
 **The LLM is Azure-hosted GPT-5 mini, not Claude** — an explicit user
 choice for this feature (shared Day 1 event credential:
@@ -290,17 +291,71 @@ error-coercion logic learned by testing against the real API; now it's in
 one place, and this agent's tools are the same trusted code path rather
 than a second implementation).
 
-**Prompted specifically to fetch-then-judge, not assume the API is smart.**
-The system prompt in `azureAgent.js` tells the model outright that
-`search_catalogue` only filters by exact category — no price/colour/
-keyword support — and that for anything needing judgement it should fetch
-a wide `search_catalogue` result (raise `limit`) and reason over the
-returned fields itself. It's also told to only call `place_order` on an
-explicit, unambiguous purchase instruction — otherwise describe findings
-and ask first. `get_product`'s tool result has its embedded base64 image
-stripped before it ever reaches the model (nothing in a text-only
-tool-result channel can use raw image bytes; sending them would just burn
-tokens).
+The system prompt in `azureAgent.js` tells the model to only call
+`place_order` on an explicit, unambiguous purchase instruction — otherwise
+describe findings and ask first. `get_product`'s tool result has its
+embedded base64 image stripped before it ever reaches the model (nothing
+in a text-only tool-result channel can use raw image bytes; sending them
+would just burn tokens).
+
+## Vector RAG product search
+
+`search_catalogue`'s original design (Level 2, calling the live external
+API's `search-index` endpoint) could only filter by exact category name —
+no price range, colour, or keyword search. The workaround at the time was
+prompting the model to fetch broad result sets and eyeball-judge them
+itself, which worked but was wasteful and imprecise for anything semantic
+("cozy", "a vibe for a reading nook"). This section replaces that: the
+tool now does real vector similarity search over Supabase's own synced
+copy of the catalogue instead.
+
+**No embedding deployment exists on the Day 1 Azure resource.** Before
+building this, tested directly against the Azure endpoint with the five
+most common embedding deployment names (`text-embedding-3-small/large`,
+`text-embedding-ada-002`, `embedding`, `text-embedding`) — every one came
+back `DeploymentNotFound`. Only the `gpt-5-mini` chat deployment was
+provisioned for participants. Rather than requiring a second external
+credential (e.g. an OpenAI API key) just for embeddings, `src/lib/embeddings.js`
+runs `Xenova/all-MiniLM-L6-v2` locally via `@xenova/transformers` —
+downloads the model once (~90MB, cached in `node_modules`), then runs
+fully offline with no API key and no per-call cost. Produces 384-dim
+vectors; confirmed working with a direct test (`pipeline("feature-extraction", ...)`)
+before writing anything else.
+
+**Data flow**: `supabase/vector-search.sql` (run once in the Supabase SQL
+Editor, same pattern as `schema.sql`) enables the `vector` extension, adds
+an `embedding vector(384)` column to `products`, and defines a
+`match_products` SQL function that ranks by cosine distance
+(`embedding <=> query_embedding`) with optional `filter_category`/
+`max_price` filters applied in the same query (a hybrid search — vector
+similarity for anything semantic, exact SQL filtering for anything the
+user gave a real number/name for; embeddings alone can't reliably encode
+"under $200"). No ivfflat/approximate-nearest-neighbor index — at 762
+rows a full sequential scan is a few milliseconds, not worth the tuning.
+
+`scripts/embed-products.mjs` (`npm run embed-products`) is the backfill:
+embeds `name + category + description + colours + price` for every row in
+`products` and writes it to the new `embedding` column (762/762 done,
+confirmed via a count query). Safe to re-run after any catalogue change.
+`src/lib/productSearch.js` (`vectorSearchProducts()`) is what
+`search_catalogue` actually calls — embeds the query text, calls
+`match_products` via `supabase.rpc()`, maps rows back to the same
+`item_id`/`product_name`/`price`/`category`/`colours` shape the rest of
+the app already expects (so `get_product`/`place_order` downstream still
+work unchanged, keyed by the same real external-API `item_id`).
+
+The system prompt was rewritten accordingly: `search_catalogue` is
+described as semantic search, not a category-only listing, and the model
+is told to pass `category`/`max_price` as real structured filters
+whenever the user gave an explicit one, and to put everything else
+(colour, vibe, room, style) in the free-text `query`.
+
+Verified live end-to-end (disposable test user): "find me a cozy chair
+for reading in a small room" → returned an actual swivel armchair and two
+armchairs, all real, relevant matches, no category given by the user at
+all; "show me a bed under $200" → correctly passed `category: "Beds"`,
+`max_price: 200`, and every result returned was a real bed at or under
+$200.
 
 **`place_order` never executes a real purchase itself — it stages one for
 the user to confirm.** This is a structural interception, not just a
@@ -400,9 +455,11 @@ the same query went from timing out to ~1.3s and ~342KB.
 
 ```
 my-furniture-buyer-app/
-  supabase/schema.sql        # run once in the Supabase SQL editor
-  scripts/sync-products.mjs  # one-off: loads products from MongoDB (npm run sync-products)
-  .env.local.example         # template for Supabase + Mongo + external-API + Azure env vars
+  supabase/schema.sql         # run once in the Supabase SQL editor
+  supabase/vector-search.sql  # run once: pgvector + embedding column + match_products()
+  scripts/sync-products.mjs   # one-off: loads products from MongoDB (npm run sync-products)
+  scripts/embed-products.mjs  # one-off: embeds every product for vector search (npm run embed-products)
+  .env.local.example          # template for Supabase + Mongo + external-API + Azure env vars
   src/
     app/
       page.js                 # homepage: live product listing + Buy button + shop assistant chat
@@ -423,8 +480,10 @@ my-furniture-buyer-app/
     lib/
       supabaseClient.js       # the one Supabase client instance
       AuthContext.js          # React context exposing { user, session, signOut }
-      externalApi.js          # shared external-API client: search/get/balance/order/history
+      externalApi.js          # shared external-API client: get/balance/order/history (real API)
       azureAgent.js           # the shop assistant's tool-calling loop (Azure GPT-5 mini)
+      embeddings.js           # local text embeddings (Xenova/all-MiniLM-L6-v2), no API key needed
+      productSearch.js        # vector similarity search over Supabase's products table
 ```
 
 ## Running it

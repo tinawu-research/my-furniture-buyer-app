@@ -8,16 +8,15 @@
 // directly against the endpoint). "low" effort plus a few thousand tokens
 // is comfortably enough for this assistant's tasks.
 
-import { searchCatalogue, getProduct, checkBalance } from "@/lib/externalApi";
+import { getProduct, checkBalance } from "@/lib/externalApi";
+import { vectorSearchProducts } from "@/lib/productSearch";
 
-const SYSTEM_PROMPT = `You are a shopping assistant for a furniture shop. You have four tools, each calling a real external API:
+const SYSTEM_PROMPT = `You are a shopping assistant for a furniture shop. You have four tools:
 
-- search_catalogue: lists products, filterable ONLY by an exact category name, with limit/skip pagination. The API itself has no price range, colour, or keyword/text search.
-- get_product: full detail for one specific item you already have the item_id for (from a prior search_catalogue call). Not for browsing.
-- check_balance: the user's real, current account balance. A snapshot number only, no transaction history.
-- place_order: stages a proposed purchase (item_id + quantity) for the user to confirm — it does NOT charge anything by itself. Once the user confirms (through a UI button, not by replying to you), the purchase executes immediately and cannot be undone.
-
-When a request needs judgement the API can't do itself — "cheap", a colour, a vibe, "under $X" — fetch a reasonably wide set of plain results yourself via search_catalogue (raise limit if needed) and apply that judgement over the returned fields (price, colours, product_name, category) yourself. Never assume the API understands these concepts; it only filters by exact category name.
+- search_catalogue: semantic (vector) search over the catalogue — describe what the user wants in plain language (colour, vibe, room, style, use-case) in the query, and it returns the closest matches ranked by similarity. Pass category and/or max_price too whenever the user gave an exact category or an explicit numeric price limit — those are applied as real filters, not just described in the query text.
+- get_product: full detail for one specific item you already have the item_id for (from a prior search_catalogue call). Not for browsing. Calls the real external API.
+- check_balance: the user's real, current account balance, from the real external API. A snapshot number only, no transaction history.
+- place_order: stages a proposed purchase (item_id + quantity) for the user to confirm — it does NOT charge anything by itself. Once the user confirms (through a UI button, not by replying to you), the purchase executes immediately and cannot be undone, against the real external API.
 
 Only call place_order when the user has given an explicit, unambiguous instruction to buy/order/purchase a specific item. For browsing, comparisons, or recommendations, describe what you found instead. After calling place_order, its result tells you the exact item, quantity, and total price being proposed — state those clearly and tell the user a confirmation button will appear; do not say the purchase is complete, since it isn't yet.
 
@@ -31,21 +30,28 @@ const TOOLS = [
     function: {
       name: "search_catalogue",
       description:
-        "List furniture products, optionally filtered to one exact category name, with limit/skip pagination. No price, colour, or keyword filtering in the API itself — fetch broadly and filter yourself for those.",
+        "Semantic search over the furniture catalogue (vector similarity, not keyword matching) — describe what the user is looking for in plain language. Returns the closest-matching products ranked by relevance.",
       parameters: {
         type: "object",
         properties: {
+          query: {
+            type: "string",
+            description: "Plain-language description of what to search for, e.g. 'cozy blue armchair for a small reading nook'.",
+          },
           category: {
             type: "string",
-            description: "Exact category name (e.g. 'Chairs', 'Beds'). Omit to list across all categories.",
+            description: "Exact category name (e.g. 'Chairs', 'Beds') to filter to, only when the user named one explicitly.",
+          },
+          max_price: {
+            type: "number",
+            description: "Only return items at or under this price, only when the user gave an explicit numeric limit.",
           },
           limit: {
             type: "integer",
-            description: "Max results to return. Default 20 — raise it (e.g. 100+) when you need enough data to judge/filter yourself.",
+            description: "Max results to return. Default 10.",
           },
-          skip: { type: "integer", description: "Number of results to skip, for pagination." },
         },
-        required: [],
+        required: ["query"],
       },
     },
   },
@@ -94,7 +100,12 @@ const TOOLS = [
 // directly.
 const TOOL_IMPLEMENTATIONS = {
   search_catalogue: (input) =>
-    searchCatalogue({ category: input.category, limit: input.limit, skip: input.skip }),
+    vectorSearchProducts({
+      query: input.query,
+      category: input.category,
+      maxPrice: input.max_price,
+      limit: input.limit,
+    }),
   get_product: (input) => getProduct(input.item_id),
   check_balance: () => checkBalance(),
 };
