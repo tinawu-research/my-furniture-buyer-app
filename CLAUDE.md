@@ -135,13 +135,17 @@ app's own infrastructure, and not the same thing as the Supabase
   e.g. `u001`, being queried). What `GET /api/balance` calls, using
   `EXTERNAL_API_USER_ID`/`EXTERNAL_API_KEY`; `/orders/page.js` shows the
   result as "Balance."
-- `POST /orders` — same auth; body is `{ user_id, item_id, quantity }`.
-  What `POST /api/buy` calls (via `src/components/BuyButton.js`, the "Buy"
-  button on each product card). On success returns `order_id`,
-  `total_price`, `remaining_balance` — passed straight through to the
-  button, which shows all three inline; no separate call to
-  `GET /api/balance` needed since the order response already includes the
-  new balance.
+- `POST /orders` — same auth. **The Day 1 Participant Guide's example body,
+  `{ user_id, item_id, quantity }`, is wrong** — confirmed by testing
+  directly against the live API. The real shape is
+  `{ user_id, items: [{ item_id, quantity }] }` (an array, even for one
+  item); the flat shape gets a 422 with no `item_id`/`quantity` fields at
+  all. `POST /api/buy` sends the correct (real) shape. On success returns
+  `order_id`, `items` (per-line `unit_price`/`line_total`), `total_price`,
+  `remaining_balance` — the last two, plus `order_id`, get passed straight
+  through to the Buy button, which shows all three inline; no separate call
+  to `GET /api/balance` needed since the order response already includes
+  the new balance.
 - `GET /orders/{user_id}`, `GET /orders/{order_id}/invoice` — same auth.
   Not called from anywhere yet (order history on `/orders` is still the
   Supabase one, not this API's).
@@ -163,12 +167,29 @@ Both `/api/buy` (a network failure reaching the external API, or a
 malformed request body) and `BuyButton.js` (a network failure reaching our
 own `/api/buy`) wrap their fetch calls in try/catch so a failure of either
 kind always turns into a clean error message and a re-enabled Buy button —
-never an unhandled exception. Verified all of this by pointing
-`EXTERNAL_API_BASE_URL` at a throwaway local mock server that returns
-402/404/429/200 on command (plus killing it outright to test the
-network-failure path), since the real external API can't be told to fail
-in a specific way on request; reverted `.env.local` back to the real
-values afterward.
+never an unhandled exception. Verified the 402/404/429/200/network-down
+paths against a throwaway local mock server (the real API can't be told to
+fail in a specific way on request), then verified 200 and 404 for real
+too, against a real account/order (see below) — 404's real body is
+`{"detail": "No product with item_id '...'"}`, a plain string, but a real
+422 (e.g. from a malformed request) comes back as `{"error": [{"type",
+"loc", "msg", ...}, ...]}` — an *array* of objects, not a string.
+`toErrorMessage()` in `api/buy/route.js` coerces any of these shapes
+(string, array, arbitrary object) to a plain string before it ever reaches
+`Response.json()` — passing an array/object straight into React as
+`{error}` would genuinely crash the page ("Objects are not valid as a
+React child"), so this isn't just tidiness.
+
+**This app has real credentials configured** (`EXTERNAL_API_USER_ID`,
+`EXTERNAL_API_KEY` in `.env.local` — Tina's own `cognitivo028` account).
+Balance and Buy were both verified against the live API for real, not just
+mocked: fetched the real balance ($5000 starting), bought the two
+cheapest real items in the catalogue (a $1.20 "Knob" and a $2.00
+"Cross-brace") through `/api/buy`, and confirmed the balance actually
+dropped by the right amount each time ($5000 → $4998.80 → $4996.80).
+Discovering the wrong request-body shape above only happened *because* of
+this real test — the mock server (built from the docs) couldn't have
+caught it, since it was mocking the documented shape, not the real one.
 
 `src/app/page.js` is an **async Server Component** (no `"use client"`),
 calling `fetch(..., { cache: "no-store" })` directly — required here:

@@ -1,5 +1,17 @@
 import { createClient } from "@supabase/supabase-js";
 
+// The API's error responses aren't always a plain string (e.g. a 422
+// validation error's "error" field is an array of {type, loc, msg, ...}
+// objects) — coerce to a string so it's always safe to render as-is.
+function toErrorMessage(raw, fallback) {
+  if (typeof raw === "string") return raw;
+  if (Array.isArray(raw)) {
+    return raw.map((e) => e?.msg ?? JSON.stringify(e)).join("; ") || fallback;
+  }
+  if (raw && typeof raw === "object") return JSON.stringify(raw);
+  return fallback;
+}
+
 // Places a real order through the external Product Search API (Level 2).
 // Server-only: EXTERNAL_API_KEY must never reach the browser.
 export async function POST(request) {
@@ -47,15 +59,17 @@ export async function POST(request) {
       },
       body: JSON.stringify({
         user_id: externalUserId,
-        item_id,
-        quantity: quantity ?? 1,
+        items: [{ item_id, quantity: quantity ?? 1 }],
       }),
     });
 
     const body = await res.json().catch(() => ({}));
 
     if (!res.ok) {
-      let message = body.error ?? body.detail ?? `Order failed (status ${res.status}).`;
+      let message = toErrorMessage(
+        body.error ?? body.detail,
+        `Order failed (status ${res.status}).`
+      );
       if (res.status === 402) {
         message = "Insufficient balance: this order costs more than you have left.";
       } else if (res.status === 404) {
