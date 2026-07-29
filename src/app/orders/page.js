@@ -1,0 +1,83 @@
+"use client";
+
+import { useEffect, useState, useCallback } from "react";
+import { supabase } from "@/lib/supabaseClient";
+import { useAuth } from "@/lib/AuthContext";
+import RequireAuth from "@/components/RequireAuth";
+import BudgetTracker from "@/components/BudgetTracker";
+
+function OrdersContent() {
+  const { user } = useAuth();
+  const [orders, setOrders] = useState([]);
+  const [budget, setBudget] = useState(0);
+  const [loading, setLoading] = useState(true);
+
+  const loadData = useCallback(async () => {
+    setLoading(true);
+    const [ordersRes, profileRes] = await Promise.all([
+      supabase
+        .from("orders")
+        .select("id, total, created_at, order_items(quantity, price, products(name))")
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: false }),
+      supabase.from("profiles").select("budget").eq("id", user.id).single(),
+    ]);
+    setOrders(ordersRes.data ?? []);
+    setBudget(profileRes.data?.budget ?? 0);
+    setLoading(false);
+  }, [user]);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional fetch-on-mount
+    loadData();
+  }, [loadData]);
+
+  if (loading) return <p className="p-6 text-gray-500">Loading orders...</p>;
+
+  const spent = orders.reduce((sum, o) => sum + Number(o.total), 0);
+
+  return (
+    <div className="max-w-3xl mx-auto px-6 py-8">
+      <h1 className="text-2xl font-bold mb-4">My Orders</h1>
+
+      <div className="mb-6">
+        <BudgetTracker budget={budget} spent={spent} />
+      </div>
+
+      {orders.length === 0 && (
+        <p className="text-gray-500">
+          No orders yet — head to the catalogue to place one.
+        </p>
+      )}
+
+      <div className="flex flex-col gap-4">
+        {orders.map((order) => (
+          <div key={order.id} className="border rounded-lg p-4">
+            <div className="flex justify-between text-sm text-gray-500 mb-2">
+              <span>{new Date(order.created_at).toLocaleString()}</span>
+              <span className="font-medium text-black">
+                ${Number(order.total).toFixed(2)}
+              </span>
+            </div>
+            <ul className="text-sm list-disc list-inside">
+              {order.order_items.map((item, i) => (
+                <li key={i}>
+                  {item.quantity} x {item.products?.name} (${Number(item.price).toFixed(2)}{" "}
+                  each)
+                </li>
+              ))}
+            </ul>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+export default function OrdersPage() {
+  return (
+    <RequireAuth>
+      <OrdersContent />
+    </RequireAuth>
+  );
+}
