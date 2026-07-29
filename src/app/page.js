@@ -3,6 +3,8 @@
 // latter embeds every product's image as base64 and can take 20+ seconds
 // against the real catalogue; search-index returns the same products
 // without images, in a fraction of the size and time.
+import BuyButton from "@/components/BuyButton";
+
 async function getProducts() {
   const baseUrl = process.env.EXTERNAL_API_BASE_URL;
   const res = await fetch(`${baseUrl}/catalogue/search-index?limit=1000`, {
@@ -43,7 +45,8 @@ export default async function Home() {
               {product.category}
             </span>
             <h3 className="font-semibold">{product.product_name}</h3>
-            <p className="font-medium">${Number(product.price).toFixed(2)}</p>
+            <p className="font-medium mb-2">${Number(product.price).toFixed(2)}</p>
+            <BuyButton itemId={product.item_id} />
           </div>
         ))}
       </div>
