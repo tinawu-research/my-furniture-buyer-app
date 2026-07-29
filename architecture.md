@@ -94,8 +94,10 @@ could get out of sync if something failed halfway through).
 [CLAUDE.md](./CLAUDE.md#catalogue-data-source) for how that script works.
 `externalId` is that source's own item ID, kept so the script can be re-run
 safely: it updates existing rows by `externalId` instead of creating
-duplicates. Product photos are stored as data URIs (the image bytes,
-base64-encoded, inline in the `image_url` column) rather than in separate
-image files — simplest option for now, at the cost of a larger database;
-moving them to Supabase Storage would be the natural next step if that ever
-becomes a problem.
+duplicates. Product photos are uploaded to a public Supabase Storage bucket
+(`product-images`); `image_url` just holds the resulting URL. (Earlier
+version of this script stored the image bytes as base64 text directly in
+`image_url` — simpler, but with 762 products averaging ~120KB of image
+data each, a `select *` on `products` — which the home page runs on every
+load — grew large/slow enough to hit Postgres's statement timeout. Moving
+to Storage was the fix.)

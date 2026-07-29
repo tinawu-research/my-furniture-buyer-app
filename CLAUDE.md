@@ -111,20 +111,30 @@ Node script — not part of the running app — that:
    `price`, `category`, `colours`, `width`/`height`/`depth`,
    `image_url` + `image_mime_type` — the image as base64 text, not an
    actual URL despite the field name — `link`, `item_id`).
-2. Maps each document onto a `products` row (`item_id` -> `external_id`,
-   `image_url`/`image_mime_type` combined into one `data:` URI so
-   `<img src>` needs no special handling, a short `description` synthesized
-   from colours/dimensions since the source has no free-text description).
+2. Uploads each product's image to the public `product-images` Storage
+   bucket (20 concurrent uploads) and maps the document onto a `products`
+   row (`item_id` -> `external_id`, `image_url` set to the resulting
+   Storage URL, a short `description` synthesized from colours/dimensions
+   since the source has no free-text description).
 3. Writes to Supabase using the **service role key**
    (`SUPABASE_SERVICE_ROLE_KEY`, server-only, bypasses Row Level Security —
    deliberately not the anon key, since ordinary users/sessions should never
    be able to rewrite the catalogue), deletes any leftover rows without an
    `external_id` (old placeholder data), then upserts the real catalogue in
-   batches of 25 keyed on `external_id` (re-running the script updates
+   batches of 100 keyed on `external_id` (re-running the script updates
    rather than duplicates).
 
 This script talks to MongoDB only as a one-time import source — the running
 app never connects to Mongo, only to Supabase.
+
+**Why images live in Storage, not the `products` row:** the first version
+of this script stored each image as base64 text directly in `image_url`.
+That worked, but 762 products averaging ~120KB of image data each made a
+`select *` on `products` — which the home page runs on every load — slow
+and large enough to hit Postgres's statement timeout (confirmed: it failed
+consistently with `"canceling statement due to statement timeout"`).
+Uploading images to Storage and keeping only a URL in the row fixed it —
+the same query went from timing out to ~1.3s and ~342KB.
 
 ## Folder structure
 
