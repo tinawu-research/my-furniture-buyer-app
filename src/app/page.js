@@ -47,8 +47,12 @@ export default function Home() {
     const product = products.find((p) => p.id === productId);
     return sum + (product ? Number(product.price) * qty : 0);
   }, 0);
+  const remainingBudget = budget - spent;
+  const overBudget = cartTotal > remainingBudget;
 
   async function placeOrder() {
+    if (overBudget) return;
+
     setError(null);
     setMessage(null);
     setPlacingOrder(true);
@@ -118,25 +122,33 @@ export default function Home() {
       </div>
 
       {cartEntries.length > 0 && (
-        <div className="sticky bottom-4 border rounded-lg bg-white shadow p-4 flex items-center justify-between">
-          <span>
-            {cartEntries.length} item(s) — ${cartTotal.toFixed(2)}
-          </span>
-          {user ? (
-            <button
-              onClick={placeOrder}
-              disabled={placingOrder}
-              className="rounded bg-black text-white px-4 py-2 hover:bg-gray-800 disabled:opacity-50"
-            >
-              {placingOrder ? "Placing order..." : "Place order"}
-            </button>
-          ) : (
-            <Link
-              href="/login"
-              className="rounded bg-black text-white px-4 py-2 hover:bg-gray-800"
-            >
-              Log in to order
-            </Link>
+        <div className="sticky bottom-4 border rounded-lg bg-white shadow p-4">
+          <div className="flex items-center justify-between">
+            <span>
+              {cartEntries.length} item(s) — ${cartTotal.toFixed(2)}
+            </span>
+            {user ? (
+              <button
+                onClick={placeOrder}
+                disabled={placingOrder || overBudget}
+                className="rounded bg-black text-white px-4 py-2 hover:bg-gray-800 disabled:opacity-50"
+              >
+                {placingOrder ? "Placing order..." : "Place order"}
+              </button>
+            ) : (
+              <Link
+                href="/login"
+                className="rounded bg-black text-white px-4 py-2 hover:bg-gray-800"
+              >
+                Log in to order
+              </Link>
+            )}
+          </div>
+          {user && overBudget && (
+            <p className="text-sm text-red-600 mt-2">
+              This order is ${(cartTotal - remainingBudget).toFixed(2)} over your
+              remaining budget — remove an item to continue.
+            </p>
           )}
         </div>
       )}

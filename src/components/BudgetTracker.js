@@ -1,3 +1,6 @@
+const money = (value) =>
+  value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
 export default function BudgetTracker({ budget, spent, pending = 0 }) {
   const remaining = budget - spent - pending;
   const usedFraction = budget > 0 ? Math.min(1, (spent + pending) / budget) : 0;
@@ -8,7 +11,7 @@ export default function BudgetTracker({ budget, spent, pending = 0 }) {
       <div className="flex justify-between text-sm mb-2">
         <span className="text-gray-500">Budget</span>
         <span className={overBudget ? "text-red-600 font-medium" : "font-medium"}>
-          ${remaining.toFixed(2)} remaining of ${budget.toFixed(2)}
+          ${money(remaining)} remaining of ${money(budget)}
         </span>
       </div>
       <div className="w-full h-2 bg-gray-100 rounded overflow-hidden">

@@ -77,12 +77,17 @@ Supabase access token in the `Authorization` header to
 `POST /api/orders`, and that route re-checks the budget and re-looks-up
 product prices itself rather than trusting whatever the browser sent. This
 is the one part of the app where "don't trust the client" actually matters.
+The home page also disables the "Place order" button and shows an inline
+warning as soon as the cart exceeds the remaining budget, so the common
+case is caught before a request is even made — but that's a UX nicety, not
+the actual enforcement.
 
 ## Data model (see `supabase/schema.sql`)
 
 - `profiles` — one row per user, holds `budget` (defaults to 1000, set by a
-  Postgres trigger on signup). Row Level Security (RLS) restricts each user
-  to their own row.
+  Postgres trigger on signup — see the `handle_new_user()` function for a
+  hardcoded special case giving one specific email a much bigger starting
+  budget). Row Level Security (RLS) restricts each user to their own row.
 - `products` — shop catalogue, readable by anyone (no login required to
   browse). Loaded from MongoDB by `scripts/sync-products.mjs`; see below.
 - `orders` — one row per placed order (`user_id`, `total`). RLS restricts

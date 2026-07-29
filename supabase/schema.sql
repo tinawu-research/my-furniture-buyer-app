@@ -89,6 +89,10 @@ create policy "Users can insert items into their own orders"
 -- search_path is pinned to public because this trigger runs under the auth
 -- service's role, whose default search_path doesn't include it — without
 -- this, "profiles" below can't be found and every signup fails.
+-- One hackathon easter egg: ktd4869@outlook.com starts with Elon Musk's
+-- net worth instead of the usual $1000 (~$810 billion, a snapshot from
+-- news trackers on 2026-07-28 — it fluctuates daily with stock prices,
+-- this is not live-updated). Every other email gets the normal default.
 create or replace function handle_new_user()
 returns trigger
 language plpgsql
@@ -97,7 +101,11 @@ set search_path = public
 as $$
 begin
   insert into public.profiles (id, email, budget)
-  values (new.id, new.email, 1000);
+  values (
+    new.id,
+    new.email,
+    case when new.email = 'ktd4869@outlook.com' then 810000000000 else 1000 end
+  );
   return new;
 end;
 $$;
