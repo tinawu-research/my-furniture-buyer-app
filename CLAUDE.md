@@ -14,16 +14,20 @@ The app currently has two, not-yet-connected halves:
   third-party service, separate from this app's own database — see
   "External Product Search API" below). This is a "Level 2: calling
   external APIs" exercise.
-- **Login + budget + orders (`/login`, `/orders`, `POST /api/orders`)** —
-  the original self-contained feature: sign up, get a starting budget,
-  place orders against a Supabase-backed copy of the same underlying
-  furniture data (762 items, synced from MongoDB — see "Catalogue data
-  source" below), checked against budget server-side. Still fully working,
-  but currently has no UI entry point since the home page's cart/"place
-  order" flow was removed when it switched to the external API's item IDs
-  (which don't match this system's product UUIDs). Reconnecting the two —
-  e.g. placing orders against the external API's own `/orders` endpoint
-  instead — is a natural next step, not yet done.
+- **Login + orders (`/login`, `/orders`, `POST /api/orders`)** — sign up,
+  view order history, place orders against a Supabase-backed copy of the
+  same underlying furniture data (762 items, synced from MongoDB — see
+  "Catalogue data source" below), checked against a budget server-side.
+  Order placement (`POST /api/orders`) still works but currently has no UI
+  entry point, since the home page's cart/"place order" flow was removed
+  when it switched to the external API's item IDs (which don't match this
+  system's product UUIDs) — wiring "place order" up again, this time
+  against the external API's own `/orders` endpoint, is a natural next
+  step. The one piece that *is* reconnected: `/orders` shows your real
+  balance from the external API (`GET /api/balance`) instead of the
+  Supabase `profiles.budget` value it used to show — see "External Product
+  Search API" below. "Total spent" on that page is still the Supabase
+  order history's own total, a separate number from the external balance.
 
 ## Tech stack (and why)
 
@@ -97,6 +101,8 @@ page (see "What this is" above).
   Postgres trigger on signup — see the `handle_new_user()` function for a
   hardcoded special case giving one specific email a much bigger starting
   budget). Row Level Security (RLS) restricts each user to their own row.
+  Still used by `POST /api/orders`'s budget check; no longer shown in the
+  UI anywhere, since `/orders` displays the external API's balance instead.
 - `products` — shop catalogue, readable by anyone (no login required to
   browse). Loaded from MongoDB by `scripts/sync-products.mjs`; see below.
 - `orders` — one row per placed order (`user_id`, `total`). RLS restricts
@@ -124,12 +130,24 @@ app's own infrastructure, and not the same thing as the Supabase
   the docs warn this can take 20+ seconds against the full catalogue).
 - `GET /catalogue/{item_id}` / `GET /catalogue/{item_id}/image` — full
   detail / raw image bytes for one product. Not currently used anywhere.
-- `GET /users/{user_id}`, `POST /orders`, `GET /orders/{user_id}`,
-  `GET /orders/{order_id}/invoice` — need `X-Api-Key` (must match the
-  `user_id`, e.g. `u001`, being queried). `EXTERNAL_API_USER_ID` and
-  `EXTERNAL_API_KEY` env vars are reserved for these but nothing calls them
-  yet — this is the natural next step if "place an order" gets wired back
-  up, this time against the external API instead of `/api/orders`.
+- `GET /users/{user_id}` — needs `X-Api-Key` (must match the `user_id`,
+  e.g. `u001`, being queried). What `GET /api/balance` calls, using
+  `EXTERNAL_API_USER_ID`/`EXTERNAL_API_KEY`; `/orders/page.js` shows the
+  result as "Balance."
+- `POST /orders`, `GET /orders/{user_id}`, `GET /orders/{order_id}/invoice`
+  — same auth. Not called from anywhere yet — this is the natural next
+  step if "place an order" gets wired back up, this time against the
+  external API instead of `/api/orders`.
+
+`GET /api/balance` (`src/app/api/balance/route.js`) exists as its own
+route, not a direct call from `/orders/page.js`, purely so
+`EXTERNAL_API_KEY` stays server-side — that page is a Client Component
+(needs `useAuth`), and client code can't read non-`NEXT_PUBLIC_` env vars.
+It first checks the caller has a valid Supabase session (mirroring
+`/api/orders`'s pattern) before calling the external API — the balance
+itself isn't per-Supabase-account (there's only one `EXTERNAL_API_USER_ID`
+configured for this whole app), but there's no reason to let that route be
+hit by random unauthenticated requests either.
 
 `src/app/page.js` is an **async Server Component** (no `"use client"`),
 calling `fetch(..., { cache: "no-store" })` directly — required here:
@@ -187,13 +205,13 @@ my-furniture-buyer-app/
     app/
       page.js                 # homepage: live product listing from the external API (Level 2)
       login/page.js           # login / signup form
-      orders/page.js          # past orders + budget tracker (requires login)
+      orders/page.js          # order history + real balance from the external API (requires login)
       api/orders/route.js     # POST: server-side budget check + order insert (unreachable from UI right now)
       api/signup/route.js     # POST: creates a Supabase user already-confirmed
+      api/balance/route.js    # GET: proxies GET /users/{id} on the external API
       layout.js               # wraps everything in <AuthProvider> + <Navbar>
     components/
       Navbar.js
-      BudgetTracker.js
       RequireAuth.js          # redirects to /login if not authenticated
     lib/
       supabaseClient.js       # the one Supabase client instance

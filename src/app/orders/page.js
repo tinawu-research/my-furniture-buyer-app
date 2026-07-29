@@ -4,28 +4,40 @@ import { useEffect, useState, useCallback } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { useAuth } from "@/lib/AuthContext";
 import RequireAuth from "@/components/RequireAuth";
-import BudgetTracker from "@/components/BudgetTracker";
 
 function OrdersContent() {
-  const { user } = useAuth();
+  const { user, session } = useAuth();
   const [orders, setOrders] = useState([]);
-  const [budget, setBudget] = useState(0);
+  const [balance, setBalance] = useState(null);
+  const [balanceError, setBalanceError] = useState(null);
   const [loading, setLoading] = useState(true);
 
   const loadData = useCallback(async () => {
     setLoading(true);
-    const [ordersRes, profileRes] = await Promise.all([
+
+    const [ordersRes, balanceRes] = await Promise.all([
       supabase
         .from("orders")
         .select("id, total, created_at, order_items(quantity, price, products(name))")
         .eq("user_id", user.id)
         .order("created_at", { ascending: false }),
-      supabase.from("profiles").select("budget").eq("id", user.id).single(),
+      fetch("/api/balance", {
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      }).then((res) => res.json()),
     ]);
+
     setOrders(ordersRes.data ?? []);
-    setBudget(profileRes.data?.budget ?? 0);
+
+    if (balanceRes.error) {
+      setBalanceError(balanceRes.error);
+      setBalance(null);
+    } else {
+      setBalanceError(null);
+      setBalance(balanceRes.balance);
+    }
+
     setLoading(false);
-  }, [user]);
+  }, [user, session]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional fetch-on-mount
@@ -40,9 +52,26 @@ function OrdersContent() {
     <div className="max-w-3xl mx-auto px-6 py-8">
       <h1 className="text-2xl font-bold mb-4">My Orders</h1>
 
-      <div className="flex items-baseline justify-between mb-2">
-        <span className="text-gray-500">Total spent across {orders.length} order
-          {orders.length === 1 ? "" : "s"}</span>
+      <div className="border rounded-lg p-4 mb-6">
+        <span className="text-gray-500 text-sm">Balance (from the furniture shop&apos;s API)</span>
+        {balanceError ? (
+          <p className="text-red-600 mt-1">{balanceError}</p>
+        ) : (
+          <p className="text-xl font-semibold mt-1">
+            $
+            {balance.toLocaleString(undefined, {
+              minimumFractionDigits: 2,
+              maximumFractionDigits: 2,
+            })}
+          </p>
+        )}
+      </div>
+
+      <div className="flex items-baseline justify-between mb-6">
+        <span className="text-gray-500">
+          Total spent across {orders.length} order{orders.length === 1 ? "" : "s"} in
+          this app&apos;s own order history
+        </span>
         <span className="text-xl font-semibold">
           $
           {spent.toLocaleString(undefined, {
@@ -52,15 +81,7 @@ function OrdersContent() {
         </span>
       </div>
 
-      <div className="mb-6">
-        <BudgetTracker budget={budget} spent={spent} />
-      </div>
-
-      {orders.length === 0 && (
-        <p className="text-gray-500">
-          No orders yet — head to the catalogue to place one.
-        </p>
-      )}
+      {orders.length === 0 && <p className="text-gray-500">No orders yet.</p>}
 
       <div className="flex flex-col gap-4">
         {orders.map((order) => (
