@@ -1,10 +1,10 @@
 import { createClient } from "@supabase/supabase-js";
-import { checkBalance } from "@/lib/externalApi";
+import { runShopAssistant } from "@/lib/azureAgent";
 
-// Fetches the real balance from the external Product Search API (Level 2).
-// Server-only: EXTERNAL_API_KEY must never reach the browser — "anyone
-// holding it can act as your user" per the Day 1 Participant Guide.
-export async function GET(request) {
+// Runs a user's plain-English request through the shop assistant agent.
+// Requires a logged-in Supabase session, same pattern as the other
+// external-API-backed routes.
+export async function POST(request) {
   const authHeader = request.headers.get("Authorization") ?? "";
   const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -21,8 +21,13 @@ export async function GET(request) {
     return Response.json({ error: "Not authenticated" }, { status: 401 });
   }
 
+  const { message } = await request.json().catch(() => ({}));
+  if (!message || typeof message !== "string" || !message.trim()) {
+    return Response.json({ error: "Missing message" }, { status: 400 });
+  }
+
   try {
-    const result = await checkBalance();
+    const result = await runShopAssistant(message.trim());
     return Response.json(result);
   } catch (err) {
     return Response.json({ error: err.message }, { status: err.status ?? 502 });

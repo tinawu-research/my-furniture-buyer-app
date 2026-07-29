@@ -4,6 +4,7 @@
 // against the real catalogue; search-index returns the same products
 // without images, in a fraction of the size and time.
 import BuyButton from "@/components/BuyButton";
+import ShopAssistant from "@/components/ShopAssistant";
 
 async function getProducts() {
   const baseUrl = process.env.EXTERNAL_API_BASE_URL;
@@ -37,6 +38,8 @@ export default async function Home() {
           Couldn&apos;t load the catalogue ({error}). Try refreshing the page.
         </p>
       )}
+
+      <ShopAssistant />
 
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
         {products.map((product) => (

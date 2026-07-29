@@ -15,8 +15,12 @@ The app has two largely-separate systems sharing one UI:
   Search API" below). Each product has a **Buy** button that places a real
   order through that same external API (`POST /orders`) and shows the
   resulting order ID, amount charged, and updated balance right there in
-  the card. Logged-out visitors see "Log in to buy" instead. This whole
-  page is a "Level 2: calling external APIs" exercise.
+  the card. Logged-out visitors see "Log in to buy" instead. There's also
+  a **shopping assistant chat box** on this page: type a plain-English
+  request ("find me a cheap chair", "anything in blue?") and an LLM agent
+  calls the same four external-API actions on your behalf — see "Shop
+  assistant agent" below. This whole page is a "Level 2: calling external
+  APIs" exercise.
 - **Login (`/login`)** — Supabase auth, unchanged.
 - **Orders (`/orders`)** — shows your **real** balance and **real** order
   history, both fetched live from the external API (`GET /api/balance`,
@@ -51,6 +55,10 @@ effectively dead code today.
   spreadsheet-like dashboard for viewing/editing data directly.
 - **Vercel** (not set up yet) — natural next step for free hosting when it's
   time to deploy; made by the same team as Next.js.
+- **Azure OpenAI (GPT-5 mini)** — the shop assistant agent's LLM. An
+  explicit choice made by the user for this feature, not a default —
+  everything else in this doc that says "the LLM" or "the model" means
+  this deployment, not Claude. See "Shop assistant agent" below.
 
 ## Important: this Next.js version has breaking changes
 
@@ -209,6 +217,70 @@ whatever the external API returned during `next build` instead of fetching
 fresh data per request. Confirmed by checking the build output's route
 list: `○ (Static)` vs `ƒ (Dynamic)`.
 
+## Shop assistant agent
+
+A chat box on the home page (`src/components/ShopAssistant.js`, logged-in
+only) lets the user type a plain-English request; an LLM agent turns that
+into calls against the same four external-API actions used elsewhere in
+the app (`search_catalogue`, `get_product`, `check_balance`, `place_order`
+— see "External Product Search API" above), applying whatever judgement
+the API itself can't (price comparisons, colour matching, "cheap") over
+the plain results it gets back.
+
+**The LLM is Azure-hosted GPT-5 mini, not Claude** — an explicit user
+choice for this feature (shared Day 1 event credential:
+`AZURE_AI_ENDPOINT`/`AZURE_AI_API_VERSION`/`AZURE_AI_DEPLOYMENT`/
+`AZURE_AI_API_KEY` in `.env.local`, never committed, never logged).
+`src/lib/azureAgent.js` calls the standard Azure OpenAI Chat Completions
+endpoint (`POST {endpoint}/openai/deployments/{deployment}/chat/completions
+?api-version={version}`, header `api-key: ...`) with the standard
+OpenAI-shape function-calling tools/messages — confirmed directly against
+the real endpoint before writing the loop.
+
+**GPT-5 mini is a reasoning model — this bit us on the first request.**
+Tested directly: a request with no `reasoning_effort` and
+`max_completion_tokens: 50` came back with `finish_reason: "length"` and
+**empty** content — all 50 tokens went to invisible reasoning, none left
+for the actual answer. Fix: `reasoning_effort: "low"` (plenty for this
+assistant's tasks — simple lookups and comparisons, not hard reasoning)
+plus a few-thousand-token `max_completion_tokens` budget. If you see empty
+replies from this deployment, that's almost certainly the cause.
+
+**The agent loop** (`runShopAssistant()` in `azureAgent.js`) is a plain
+manual loop, not a framework — call the endpoint, if `finish_reason` is
+`"tool_calls"` execute each one and append a `role: "tool"` message per
+call (`tool_call_id` + JSON-stringified result), loop; otherwise return
+`message.content` as the final reply. Capped at 8 turns. Tool
+implementations are the same functions the rest of the app uses, imported
+from `src/lib/externalApi.js` — a shared library factored out of
+`/api/balance`, `/api/buy`, and `/api/order-history` specifically for
+this (previously each route had its own copy of the request-shape-fix and
+error-coercion logic learned by testing against the real API; now it's in
+one place, and this agent's tools are the same trusted code path rather
+than a second implementation).
+
+**Prompted specifically to fetch-then-judge, not assume the API is smart.**
+The system prompt in `azureAgent.js` tells the model outright that
+`search_catalogue` only filters by exact category — no price/colour/
+keyword support — and that for anything needing judgement it should fetch
+a wide `search_catalogue` result (raise `limit`) and reason over the
+returned fields itself. It's also told `place_order` is real, immediate,
+and irreversible, and to only call it on an explicit, unambiguous
+purchase instruction — otherwise describe findings and ask first.
+`get_product`'s tool result has its embedded base64 image stripped before
+it ever reaches the model (nothing in a text-only tool-result channel can
+use raw image bytes; sending them would just burn tokens).
+
+Verified all four tools for real against the live API and account: asked
+it to find the cheapest chair — it fetched the whole "Chairs" category
+(`limit: 200`) and picked the actual lowest price itself, then correctly
+did **not** order it (only asked to "find", not "buy"); asked for the
+real balance — it called `check_balance` and returned the exact figure;
+asked for white beds — it fetched "Beds" broadly and filtered by colour
+itself; then gave it an explicit purchase instruction for the same $6
+item — it called `place_order` and the account's real balance dropped by
+exactly $6.
+
 ## Catalogue data source (Supabase's own copy — separate from the above)
 
 `scripts/sync-products.mjs` (run via `npm run sync-products`) is a one-off
@@ -252,25 +324,29 @@ the same query went from timing out to ~1.3s and ~342KB.
 my-furniture-buyer-app/
   supabase/schema.sql        # run once in the Supabase SQL editor
   scripts/sync-products.mjs  # one-off: loads products from MongoDB (npm run sync-products)
-  .env.local.example         # template for Supabase + Mongo + external-API env vars
+  .env.local.example         # template for Supabase + Mongo + external-API + Azure env vars
   src/
     app/
-      page.js                 # homepage: live product listing + Buy button (Level 2, external API)
+      page.js                 # homepage: live product listing + Buy button + shop assistant chat
       login/page.js           # login / signup form
       orders/page.js          # real balance + real order history, both from the external API (requires login)
       api/orders/route.js     # POST: Supabase-backed order system; dead code, nothing calls it
       api/signup/route.js     # POST: creates a Supabase user already-confirmed
-      api/balance/route.js    # GET: proxies GET /users/{id} on the external API
-      api/buy/route.js        # POST: proxies POST /orders on the external API
-      api/order-history/route.js  # GET: proxies GET /orders/{user_id} on the external API
+      api/balance/route.js    # GET: proxies checkBalance() from lib/externalApi.js
+      api/buy/route.js        # POST: proxies placeOrder() from lib/externalApi.js
+      api/order-history/route.js  # GET: proxies getOrderHistory() from lib/externalApi.js
+      api/agent/route.js      # POST: runs a chat message through the shop assistant agent
       layout.js               # wraps everything in <AuthProvider> + <Navbar>
     components/
       Navbar.js
       BuyButton.js            # "Buy" button on each product card; calls /api/buy
+      ShopAssistant.js        # chat box on the home page; calls /api/agent
       RequireAuth.js          # redirects to /login if not authenticated
     lib/
       supabaseClient.js       # the one Supabase client instance
       AuthContext.js          # React context exposing { user, session, signOut }
+      externalApi.js          # shared external-API client: search/get/balance/order/history
+      azureAgent.js           # the shop assistant's tool-calling loop (Azure GPT-5 mini)
 ```
 
 ## Running it
