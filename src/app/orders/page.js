@@ -40,6 +40,18 @@ function OrdersContent() {
     <div className="max-w-3xl mx-auto px-6 py-8">
       <h1 className="text-2xl font-bold mb-4">My Orders</h1>
 
+      <div className="flex items-baseline justify-between mb-2">
+        <span className="text-gray-500">Total spent across {orders.length} order
+          {orders.length === 1 ? "" : "s"}</span>
+        <span className="text-xl font-semibold">
+          $
+          {spent.toLocaleString(undefined, {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2,
+          })}
+        </span>
+      </div>
+
       <div className="mb-6">
         <BudgetTracker budget={budget} spent={spent} />
       </div>
