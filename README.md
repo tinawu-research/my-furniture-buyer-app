@@ -7,17 +7,19 @@ See [CLAUDE.md](./CLAUDE.md) for the full project summary, tech stack, and folde
 ## One-time setup
 
 1. **Create a free Supabase project** at [supabase.com](https://supabase.com).
-2. **Run the database setup script:** open the SQL Editor in your Supabase project, paste in the contents of [supabase/schema.sql](./supabase/schema.sql), and run it. This creates the tables, security rules, and a handful of demo products.
-3. **Copy your project's API keys:** in the Supabase dashboard, go to Project Settings > API and copy the "Project URL" and the "anon public" key.
+2. **Run the database setup script:** open the SQL Editor in your Supabase project, paste in the contents of [supabase/schema.sql](./supabase/schema.sql), and run it. This creates the tables and security rules (no products yet — those come from step 5).
+3. **Copy your project's API keys:** in the Supabase dashboard, go to Project Settings > API and copy the "Project URL", the "anon public" key, and the "service_role" secret key.
 4. **Create your local env file:**
    ```bash
    cp .env.local.example .env.local
    ```
-   Then paste your URL and anon key into `.env.local`.
-5. **Install dependencies** (only needed once, or after pulling new dependency changes):
+   Then fill in `.env.local`: your Supabase URL, anon key, and service role key, plus the `MONGODB_URI` given to you by the hackathon organizers.
+5. **Install dependencies, then load the product catalogue:**
    ```bash
    npm install
+   npm run sync-products
    ```
+   This loads ~760 furniture products from the hackathon's MongoDB into your `products` table. Safe to re-run any time (e.g. if the source data changes) — it updates existing rows rather than duplicating them.
 
 ## Running the app
 

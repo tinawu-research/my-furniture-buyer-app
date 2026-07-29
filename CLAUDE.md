@@ -8,10 +8,8 @@ each checked against that user's budget so they can't overspend. The user
 (Tina) has no coding background; Claude is doing all the implementation, so
 prioritize working, simple, well-explained code over cleverness.
 
-Products are currently demo/placeholder rows seeded by `supabase/schema.sql`
-— a real product catalogue will replace them in a later step. Because the
-UI reads products from the `products` table rather than hardcoded data, that
-swap won't require code changes.
+Products are real furniture data (762 items) loaded from a MongoDB instance
+provided for the hackathon — see "Catalogue data source" below.
 
 ## Tech stack (and why)
 
@@ -76,7 +74,7 @@ is the one part of the app where "don't trust the client" actually matters.
   Postgres trigger on signup). Row Level Security (RLS) restricts each user
   to their own row.
 - `products` — shop catalogue, readable by anyone (no login required to
-  browse). Currently seeded with placeholder demo rows.
+  browse). Loaded from MongoDB by `scripts/sync-products.mjs`; see below.
 - `orders` — one row per placed order (`user_id`, `total`). RLS restricts
   reads/writes to the owning user.
 - `order_items` — line items per order (`product_id`, `quantity`, `price`
@@ -87,12 +85,39 @@ is the one part of the app where "don't trust the client" actually matters.
 `profiles.budget - sum(orders.total for that user)` — nothing decrements a
 stored balance, which avoids concurrency/rollback headaches.
 
+## Catalogue data source
+
+`scripts/sync-products.mjs` (run via `npm run sync-products`) is a one-off
+Node script — not part of the running app — that:
+
+1. Connects to a MongoDB instance (`MONGODB_URI` env var; given out by the
+   hackathon organizers, never hardcoded) and reads its `catalog`
+   collection: 762 IKEA-style furniture documents (`product_name`,
+   `price`, `category`, `colours`, `width`/`height`/`depth`,
+   `image_url` + `image_mime_type` — the image as base64 text, not an
+   actual URL despite the field name — `link`, `item_id`).
+2. Maps each document onto a `products` row (`item_id` -> `external_id`,
+   `image_url`/`image_mime_type` combined into one `data:` URI so
+   `<img src>` needs no special handling, a short `description` synthesized
+   from colours/dimensions since the source has no free-text description).
+3. Writes to Supabase using the **service role key**
+   (`SUPABASE_SERVICE_ROLE_KEY`, server-only, bypasses Row Level Security —
+   deliberately not the anon key, since ordinary users/sessions should never
+   be able to rewrite the catalogue), deletes any leftover rows without an
+   `external_id` (old placeholder data), then upserts the real catalogue in
+   batches of 25 keyed on `external_id` (re-running the script updates
+   rather than duplicates).
+
+This script talks to MongoDB only as a one-time import source — the running
+app never connects to Mongo, only to Supabase.
+
 ## Folder structure
 
 ```
 my-furniture-buyer-app/
   supabase/schema.sql        # run once in the Supabase SQL editor
-  .env.local.example         # template for Supabase URL + anon key
+  scripts/sync-products.mjs  # one-off: loads products from MongoDB (npm run sync-products)
+  .env.local.example         # template for Supabase + Mongo env vars
   src/
     app/
       page.js                 # homepage: public product catalogue, cart, place order

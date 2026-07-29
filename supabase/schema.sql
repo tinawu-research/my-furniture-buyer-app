@@ -15,7 +15,16 @@ create table if not exists products (
   description text,
   price numeric not null,
   image_url text,
-  category text
+  category text,
+  -- Below: populated by scripts/sync-products.mjs from the catalogue source.
+  -- external_id is what makes re-running that script a safe update rather
+  -- than a duplicate insert.
+  external_id text unique,
+  colours text[],
+  width numeric,
+  height numeric,
+  depth numeric,
+  source_url text
 );
 
 create table if not exists orders (
@@ -91,14 +100,7 @@ create trigger on_auth_user_created
   after insert on auth.users
   for each row execute procedure handle_new_user();
 
--- Demo furniture so the catalogue isn't empty.
-insert into products (name, description, price, category) values
-  ('Oak Dining Table', 'Solid oak, seats 6', 899.00, 'Dining'),
-  ('Linen Sofa', '3-seater, machine-washable covers', 1299.00, 'Living Room'),
-  ('Bedside Lamp', 'Warm-white LED, dimmable', 45.00, 'Lighting'),
-  ('Bookshelf', '5-tier walnut veneer', 220.00, 'Storage'),
-  ('Office Chair', 'Ergonomic mesh back', 175.00, 'Office'),
-  ('Coffee Table', 'Tempered glass top, steel frame', 150.00, 'Living Room'),
-  ('Bar Stool', 'Set of 2, adjustable height', 99.00, 'Dining'),
-  ('Wardrobe', '3-door with mirror', 480.00, 'Bedroom')
-on conflict do nothing;
+-- Products are loaded separately, after this file runs, by:
+--   npm run sync-products
+-- which pulls the real catalogue from the hackathon's MongoDB instance.
+-- See README.md.

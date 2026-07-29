@@ -19,11 +19,17 @@ classDiagram
     }
     class Product {
         +UUID id
+        +string externalId
         +string name
         +string description
         +numeric price
         +string imageUrl
         +string category
+        +string[] colours
+        +numeric width
+        +numeric height
+        +numeric depth
+        +string sourceUrl
     }
     class Order {
         +UUID id
@@ -51,9 +57,12 @@ subtracting the total of all their past orders from this number, so it
 can never drift out of sync.
 
 **Product** is one item in the furniture catalogue — a sofa, a lamp, a
-bookshelf. It holds a name, description, price, an optional photo, and a
-category (e.g. "Living Room"). Products aren't owned by any one customer —
-everyone browsing the shop sees the same list.
+bookshelf. It holds a name, description, price, a photo, a category (e.g.
+"Sofas & armchairs"), and a few physical details (colours, width, height,
+depth) carried over from the source catalogue. `externalId` and `sourceUrl`
+trace each row back to where it came from — see "Where the catalogue data
+comes from" below. Products aren't owned by any one customer — everyone
+browsing the shop sees the same list.
 
 **Order** is created the moment a customer places an order — it's the
 receipt. It remembers who placed it (via its link to Customer), the total
@@ -77,3 +86,16 @@ it's a single, simple cap that's checked against the sum of everything a
 customer has ever ordered — one number to reason about, rather than
 tracking a shrinking balance that has to be carefully decremented (and
 could get out of sync if something failed halfway through).
+
+## Where the catalogue data comes from
+
+`products` is loaded from a MongoDB collection provided for the hackathon
+(762 IKEA-style furniture items), via `scripts/sync-products.mjs` — see
+[CLAUDE.md](./CLAUDE.md#catalogue-data-source) for how that script works.
+`externalId` is that source's own item ID, kept so the script can be re-run
+safely: it updates existing rows by `externalId` instead of creating
+duplicates. Product photos are stored as data URIs (the image bytes,
+base64-encoded, inline in the `image_url` column) rather than in separate
+image files — simplest option for now, at the cost of a larger database;
+moving them to Supabase Storage would be the natural next step if that ever
+becomes a problem.
