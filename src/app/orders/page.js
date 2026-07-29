@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { useAuth } from "@/lib/AuthContext";
 import RequireAuth from "@/components/RequireAuth";
+import KuromiMascot from "@/components/KuromiMascot";
 
 function OrdersContent() {
   const { session } = useAuth();
@@ -56,9 +57,10 @@ function OrdersContent() {
 
   return (
     <div className="max-w-3xl mx-auto px-6 py-8">
-      <h1 className="font-heading text-3xl font-extrabold mb-4">
-        My Orders <span aria-hidden>💀</span>
-      </h1>
+      <div className="flex items-center gap-2 mb-4">
+        <KuromiMascot size={40} />
+        <h1 className="font-heading text-3xl font-extrabold">My Orders</h1>
+      </div>
 
       <div className="kuromi-card p-4 mb-6">
         <span className="text-[var(--ink-soft)] text-sm font-bold">

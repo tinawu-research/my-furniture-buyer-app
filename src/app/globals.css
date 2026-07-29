@@ -25,9 +25,9 @@ body {
   color: var(--foreground);
   font-family: var(--font-body), Arial, Helvetica, sans-serif;
   background-image:
-    radial-gradient(circle at 20% 10%, rgba(255, 143, 196, 0.25) 0, transparent 45%),
-    radial-gradient(circle at 85% 25%, rgba(61, 31, 77, 0.12) 0, transparent 40%),
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120' viewBox='0 0 120 120'%3E%3Cg fill='%23f2529c' fill-opacity='0.09'%3E%3Cpath d='M20 14c4-6 12-6 14 0 2-6 10-6 14 0 3 5-3 10-14 18-11-8-17-13-14-18z'/%3E%3Cpath d='M78 70l4 4 4-4 4 4-4 4 4 4-4 4-4-4-4 4-4-4 4-4-4-4z'/%3E%3C/g%3E%3C/svg%3E");
+    radial-gradient(circle at 20% 10%, rgba(255, 143, 196, 0.3) 0, transparent 45%),
+    radial-gradient(circle at 85% 25%, rgba(61, 31, 77, 0.15) 0, transparent 40%),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140' viewBox='0 0 140 140'%3E%3Cg fill='%23f2529c' fill-opacity='0.16'%3E%3Cpath d='M22 16c4-6 13-6 15 0 2-6 11-6 15 0 3 5-3 11-15 19-12-8-18-14-15-19z'/%3E%3Cpath d='M90 78l4.5 4.5 4.5-4.5 4.5 4.5-4.5 4.5 4.5 4.5-4.5 4.5-4.5-4.5-4.5 4.5-4.5-4.5 4.5-4.5-4.5-4.5z'/%3E%3Cpath d='M20 95l2-6 6-2-6-2-2-6-2 6-6 2 6 2z'/%3E%3C/g%3E%3Cg fill='%231a1420' fill-opacity='0.05'%3E%3Ccircle cx='105' cy='30' r='4'/%3E%3Ccircle cx='115' cy='30' r='4'/%3E%3C/g%3E%3C/svg%3E");
   background-attachment: fixed;
   min-height: 100%;
 }
@@ -134,4 +134,12 @@ h1, h2, h3, h4 {
   font-family: var(--font-heading), sans-serif;
   color: var(--pink-dark);
   -webkit-text-stroke: 0.4px var(--ink);
+}
+
+/* Checkerboard-with-hearts accent strip, echoing the punk-pink mood board */
+.kuromi-pattern-strip {
+  height: 14px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='28' height='14' viewBox='0 0 28 14'%3E%3Crect width='14' height='14' fill='%231a1420'/%3E%3Crect x='14' width='14' height='14' fill='%23ff8fc4'/%3E%3Cpath d='M7 4c-1-1.5-3-1.5-3.4 0-.4-1.5-2.4-1.5-3.4 0-.6 1.2.8 2.6 3.4 4.4 2.6-1.8 4-3.2 3.4-4.4z' fill='%23ff8fc4'/%3E%3Cpath d='M21 4c-1-1.5-3-1.5-3.4 0-.4-1.5-2.4-1.5-3.4 0-.6 1.2.8 2.6 3.4 4.4 2.6-1.8 4-3.2 3.4-4.4z' fill='%231a1420'/%3E%3C/svg%3E");
+  background-repeat: repeat-x;
+  background-size: 28px 14px;
 }

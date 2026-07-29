@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useAuth } from "@/lib/AuthContext";
+import KuromiMascot from "@/components/KuromiMascot";
 
 // The agent already checks balance/availability before staging a purchase,
 // but both can change in the moment between staging and clicking Confirm —
@@ -126,9 +127,10 @@ export default function ShopAssistant() {
 
   return (
     <div className="kuromi-card p-4 mb-8">
-      <h2 className="font-heading font-bold text-lg mb-1">
-        Ask the shopping assistant <span aria-hidden>🎀</span>
-      </h2>
+      <div className="flex items-center gap-2 mb-1">
+        <KuromiMascot size={28} />
+        <h2 className="font-heading font-bold text-lg">Ask the shopping assistant</h2>
+      </div>
       <p className="text-sm text-[var(--ink-soft)] mb-3">
         e.g. &quot;find me a cheap chair&quot; or &quot;anything in blue under $100?&quot;
       </p>
