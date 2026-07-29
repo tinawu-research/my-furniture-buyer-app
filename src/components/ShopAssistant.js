@@ -4,6 +4,22 @@ import { useState } from "react";
 import Link from "next/link";
 import { useAuth } from "@/lib/AuthContext";
 
+// The agent already checks balance/availability before staging a purchase,
+// but both can change in the moment between staging and clicking Confirm —
+// and this call bypasses the LLM entirely, so translate the API's error
+// into the same plain-language-plus-suggestion tone ourselves rather than
+// showing the raw message.
+function friendlyBuyError(rawMessage) {
+  const text = (rawMessage ?? "").toLowerCase();
+  if (text.includes("insufficient balance")) {
+    return "You don't have enough balance left for this purchase. Try a smaller quantity, a cheaper item, or check your balance on the Orders page.";
+  }
+  if (text.includes("no longer available")) {
+    return "That item isn't available anymore — it may have sold out. Try asking me to search again for something similar.";
+  }
+  return `Order failed: ${rawMessage || "something went wrong"}. Try again in a moment.`;
+}
+
 export default function ShopAssistant() {
   const { user, session } = useAuth();
   const [input, setInput] = useState("");
@@ -81,7 +97,7 @@ export default function ShopAssistant() {
       if (!res.ok) {
         setMessages((prev) => [
           ...prev,
-          { role: "assistant", text: `Order failed: ${body.error ?? "something went wrong"}` },
+          { role: "assistant", text: friendlyBuyError(body.error) },
         ]);
       } else {
         setMessages((prev) => [

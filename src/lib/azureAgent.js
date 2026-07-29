@@ -21,6 +21,8 @@ When a request needs judgement the API can't do itself — "cheap", a colour, a 
 
 Only call place_order when the user has given an explicit, unambiguous instruction to buy/order/purchase a specific item. For browsing, comparisons, or recommendations, describe what you found instead. After calling place_order, its result tells you the exact item, quantity, and total price being proposed — state those clearly and tell the user a confirmation button will appear; do not say the purchase is complete, since it isn't yet.
 
+If any tool result is an error, or place_order reports insufficient balance, NEVER paste the raw error text or JSON back to the user. Instead explain in plain, friendly language what happened and suggest a concrete next step: for insufficient balance, say so plainly and suggest a smaller quantity, a cheaper alternative, or checking their balance; for an item that's no longer available, say it's no longer available and offer to search for something similar.
+
 Prices are in dollars. Be concise and conversational — this is a chat reply, not a report.`;
 
 const TOOLS = [
@@ -178,25 +180,41 @@ export async function runShopAssistant(userMessage) {
             const quantity = input.quantity ?? 1;
             const unitPrice = Number(product.price);
             const total = unitPrice * quantity;
+            const { balance } = await checkBalance();
 
-            pendingOrder = {
-              item_id: input.item_id,
-              name: product.product_name,
-              unit_price: unitPrice,
-              quantity,
-              total,
-            };
+            if (total > balance) {
+              resultContent = JSON.stringify({
+                status: "insufficient_balance",
+                item_id: input.item_id,
+                name: product.product_name,
+                unit_price: unitPrice,
+                quantity,
+                total,
+                balance,
+                shortfall: total - balance,
+                note: "The user cannot afford this — total exceeds their current balance. Do NOT stage this order (no confirmation card will be shown). Tell them plainly they don't have enough balance for this, mention roughly how much more it costs than they have, and suggest a smaller quantity, a cheaper alternative, or checking their balance — do not show raw numbers/JSON.",
+              });
+              toolCalls.push({ name: "place_order", input, ok: true, insufficientBalance: true });
+            } else {
+              pendingOrder = {
+                item_id: input.item_id,
+                name: product.product_name,
+                unit_price: unitPrice,
+                quantity,
+                total,
+              };
 
-            resultContent = JSON.stringify({
-              status: "awaiting_confirmation",
-              item_id: input.item_id,
-              name: product.product_name,
-              unit_price: unitPrice,
-              quantity,
-              total,
-              note: "This has NOT been purchased yet. Tell the user exactly what you're about to buy, the quantity, and the total price, and that a confirmation button will appear for them to approve the charge. Do not say the order is placed.",
-            });
-            toolCalls.push({ name: "place_order", input, ok: true, pending: true });
+              resultContent = JSON.stringify({
+                status: "awaiting_confirmation",
+                item_id: input.item_id,
+                name: product.product_name,
+                unit_price: unitPrice,
+                quantity,
+                total,
+                note: "This has NOT been purchased yet. Tell the user exactly what you're about to buy, the quantity, and the total price, and that a confirmation button will appear for them to approve the charge. Do not say the order is placed.",
+              });
+              toolCalls.push({ name: "place_order", input, ok: true, pending: true });
+            }
           } else {
             const impl = TOOL_IMPLEMENTATIONS[call.function.name];
             const result = impl

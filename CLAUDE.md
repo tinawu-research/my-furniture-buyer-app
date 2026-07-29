@@ -299,6 +299,35 @@ this confirmation step was added) that it correctly judged "find the
 cheapest chair" without a buy instruction as browse-only, checked the
 real account balance, and filtered "white beds" by colour itself.
 
+**Insufficient-balance and item-not-found are handled as plain-language
+explanations, never raw errors.** `place_order`'s staging step calls
+`checkBalance()` alongside `getProduct()`; if the total exceeds the
+user's real balance it skips setting `pendingOrder` entirely (no
+confirmation card appears) and returns an `insufficient_balance` tool
+result with the shortfall, explicitly instructing the model not to dump
+raw numbers/JSON and instead suggest a smaller quantity, a cheaper
+alternative, or checking their balance. If `getProduct` 404s (item
+doesn't exist / no longer available), that falls through to the generic
+tool-error catch, whose message is already human-readable
+(`externalApi.js`'s `getProduct`/`placeOrder` map known status codes —
+402, 404, 429 — to plain sentences rather than forwarding the API's raw
+`error`/`detail` body). The system prompt tells the model to treat any
+tool error the same way: explain what happened in plain language and
+suggest a concrete next step, never paste the raw text. Verified live
+with two forced failures (a fabricated item_id, and a 100,000-unit order
+that dwarfs the real balance) — both produced a plain explanation with
+suggested alternatives and left `pendingOrder` `null`, so no confirm
+button appeared for either.
+
+The one path this doesn't cover is the LLM: if the user's real balance or
+an item's availability changes in the moment *between* staging and
+clicking Confirm, `/api/buy` (called directly by `ShopAssistant.js`,
+bypassing the LLM) can still fail. `friendlyBuyError()` in
+`ShopAssistant.js` pattern-matches that response's already-plain message
+("insufficient balance" / "no longer available") to the same
+suggestion-bearing tone, so the chat never shows a bare `Order failed:
+<raw API text>` even on that edge-case path.
+
 ## Catalogue data source (Supabase's own copy — separate from the above)
 
 `scripts/sync-products.mjs` (run via `npm run sync-products`) is a one-off
