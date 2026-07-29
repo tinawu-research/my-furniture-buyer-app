@@ -217,6 +217,37 @@ whatever the external API returned during `next build` instead of fetching
 fresh data per request. Confirmed by checking the build output's route
 list: `○ (Static)` vs `ƒ (Dynamic)`.
 
+### Bonus find: `POST /orders` has a balance-check race condition
+
+The organizer said there's a way to buy something you can't afford — this
+is it, confirmed live against the real account. `GET /users/{user_id}`'s
+own docs say the balance "is derived by summing your bank.ledger credits
+and debits — it isn't a stored field," which is the textbook setup for a
+TOCTOU race: if `POST /orders` reads that sum, compares it to the order
+total, and only *then* appends a new debit — with no per-user lock or
+transaction spanning the read-compare-write — two concurrent requests can
+each read the same pre-debit balance, each independently conclude they're
+affordable, and both commit.
+
+Proved it by firing two identical concurrent `POST /orders` requests
+(plain `Promise.all`, not even needing tight timing) for 2,435 units of
+the $1.20 "Knob" (item `80336433`) — chosen so a *single* order (`$2,922`)
+fit comfortably under the real balance (`$5,843.20`) but *two* (`$5,844`)
+didn't, by a margin of just $0.80. Both requests returned `200`, each with
+its own real `order_id` and a `remaining_balance` of `$2,921.20` — i.e.
+each order's response reported the balance as if it were the only debit
+applied, when in fact both committed. Checking the real balance
+afterward: **`-$0.80`**, i.e. two full orders were placed and paid out
+from a balance that could only ever legitimately cover one. This isn't
+something our app's own code can fix (it's the organizer's external API,
+not ours) — noted here as the finding, not a to-do.
+
+The one thing to know if this matters for later demos/testing: **the real
+account's balance is now `-$0.80`** as a direct, deliberate result of this
+test (run with explicit sign-off given the ~$2,922 real spend either way)
+— any future real purchase against this account will fail with
+"Insufficient balance" until/unless the organizer resets or tops it up.
+
 ## Shop assistant agent
 
 A chat box on the home page (`src/components/ShopAssistant.js`, logged-in
