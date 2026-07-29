@@ -1,13 +1,13 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { supabase } from "@/lib/supabaseClient";
 import { useAuth } from "@/lib/AuthContext";
 import RequireAuth from "@/components/RequireAuth";
 
 function OrdersContent() {
-  const { user, session } = useAuth();
+  const { session } = useAuth();
   const [orders, setOrders] = useState([]);
+  const [ordersError, setOrdersError] = useState(null);
   const [balance, setBalance] = useState(null);
   const [balanceError, setBalanceError] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -15,18 +15,24 @@ function OrdersContent() {
   const loadData = useCallback(async () => {
     setLoading(true);
 
+    const authHeader = { Authorization: `Bearer ${session.access_token}` };
     const [ordersRes, balanceRes] = await Promise.all([
-      supabase
-        .from("orders")
-        .select("id, total, created_at, order_items(quantity, price, products(name))")
-        .eq("user_id", user.id)
-        .order("created_at", { ascending: false }),
-      fetch("/api/balance", {
-        headers: { Authorization: `Bearer ${session.access_token}` },
-      }).then((res) => res.json()),
+      fetch("/api/order-history", { headers: authHeader }).then((res) => res.json()),
+      fetch("/api/balance", { headers: authHeader }).then((res) => res.json()),
     ]);
 
-    setOrders(ordersRes.data ?? []);
+    if (ordersRes.error) {
+      setOrdersError(ordersRes.error);
+      setOrders([]);
+    } else {
+      setOrdersError(null);
+      // Newest first.
+      setOrders(
+        [...ordersRes.orders].sort(
+          (a, b) => new Date(b.timestamp) - new Date(a.timestamp)
+        )
+      );
+    }
 
     if (balanceRes.error) {
       setBalanceError(balanceRes.error);
@@ -37,7 +43,7 @@ function OrdersContent() {
     }
 
     setLoading(false);
-  }, [user, session]);
+  }, [session]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional fetch-on-mount
@@ -46,7 +52,7 @@ function OrdersContent() {
 
   if (loading) return <p className="p-6 text-gray-500">Loading orders...</p>;
 
-  const spent = orders.reduce((sum, o) => sum + Number(o.total), 0);
+  const spent = orders.reduce((sum, o) => sum + Number(o.total_amount), 0);
 
   return (
     <div className="max-w-3xl mx-auto px-6 py-8">
@@ -67,36 +73,38 @@ function OrdersContent() {
         )}
       </div>
 
-      <div className="flex items-baseline justify-between mb-6">
-        <span className="text-gray-500">
-          {`Total spent across ${orders.length} order${
-            orders.length === 1 ? "" : "s"
-          } in this app's own order history`}
-        </span>
-        <span className="text-xl font-semibold">
-          $
-          {spent.toLocaleString(undefined, {
-            minimumFractionDigits: 2,
-            maximumFractionDigits: 2,
-          })}
-        </span>
-      </div>
+      {ordersError ? (
+        <p className="text-red-600 mb-6">{ordersError}</p>
+      ) : (
+        <div className="flex items-baseline justify-between mb-6">
+          <span className="text-gray-500">
+            {`Total spent across ${orders.length} order${orders.length === 1 ? "" : "s"}`}
+          </span>
+          <span className="text-xl font-semibold">
+            $
+            {spent.toLocaleString(undefined, {
+              minimumFractionDigits: 2,
+              maximumFractionDigits: 2,
+            })}
+          </span>
+        </div>
+      )}
 
-      {orders.length === 0 && <p className="text-gray-500">No orders yet.</p>}
+      {!ordersError && orders.length === 0 && <p className="text-gray-500">No orders yet.</p>}
 
       <div className="flex flex-col gap-4">
         {orders.map((order) => (
-          <div key={order.id} className="border rounded-lg p-4">
+          <div key={order.order_id} className="border rounded-lg p-4">
             <div className="flex justify-between text-sm text-gray-500 mb-2">
-              <span>{new Date(order.created_at).toLocaleString()}</span>
+              <span>{new Date(order.timestamp).toLocaleString()}</span>
               <span className="font-medium text-black">
-                ${Number(order.total).toFixed(2)}
+                ${Number(order.total_amount).toFixed(2)}
               </span>
             </div>
             <ul className="text-sm list-disc list-inside">
-              {order.order_items.map((item, i) => (
+              {order.items.map((item, i) => (
                 <li key={i}>
-                  {item.quantity} x {item.products?.name} (${Number(item.price).toFixed(2)}{" "}
+                  {item.quantity} x {item.product_name} (${Number(item.unit_price).toFixed(2)}{" "}
                   each)
                 </li>
               ))}

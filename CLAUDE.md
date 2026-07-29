@@ -17,18 +17,25 @@ The app has two largely-separate systems sharing one UI:
   resulting order ID, amount charged, and updated balance right there in
   the card. Logged-out visitors see "Log in to buy" instead. This whole
   page is a "Level 2: calling external APIs" exercise.
-- **Login + orders (`/login`, `/orders`, `POST /api/orders`)** — a
-  separate, older, self-contained system: sign up, view order history,
-  place orders against a Supabase-backed copy of the same underlying
-  furniture data (762 items, synced from MongoDB — see "Catalogue data
-  source" below), checked against a budget server-side. `POST /api/orders`
-  still works but has no UI entry point anymore — the home page's original
-  cart/"place order" flow (which used to call it) was replaced by the Buy
-  button above, which calls the external API instead. `/orders` does show
-  one thing from the external system though: its "Balance" figure comes
-  from `GET /api/balance`, not Supabase's `profiles.budget` — see "External
-  Product Search API" below. "Total spent" on that same page is still the
-  Supabase order history's own total, a separate number from that balance.
+- **Login (`/login`)** — Supabase auth, unchanged.
+- **Orders (`/orders`)** — shows your **real** balance and **real** order
+  history, both fetched live from the external API (`GET /api/balance`,
+  `GET /api/order-history`) — not Supabase data. This used to show the
+  Supabase-backed order system's own history instead, which was confusing
+  side-by-side with the real balance (the two were entirely different
+  ledgers with no relationship to each other); now both halves of this
+  page agree with each other and with what Buy actually did.
+
+There's also an **older, separate, self-contained system** still present
+but not linked from anywhere in the UI: `POST /api/orders` places orders
+against a Supabase-backed copy of the same underlying furniture data (762
+items, synced from MongoDB — see "Catalogue data source" below), checked
+against a budget server-side (`profiles.budget`). It still works, but
+nothing calls it anymore — the home page's original cart/"place order"
+flow (which used to call it) was replaced by the Buy button above, which
+calls the external API instead. Kept around rather than deleted since it's
+a complete, tested feature that might be useful again later, but it's
+effectively dead code today.
 
 ## Tech stack (and why)
 
@@ -146,20 +153,23 @@ app's own infrastructure, and not the same thing as the Supabase
   through to the Buy button, which shows all three inline; no separate call
   to `GET /api/balance` needed since the order response already includes
   the new balance.
-- `GET /orders/{user_id}`, `GET /orders/{order_id}/invoice` — same auth.
-  Not called from anywhere yet (order history on `/orders` is still the
-  Supabase one, not this API's).
+- `GET /orders/{user_id}` — same auth. What `GET /api/order-history` calls;
+  `/orders/page.js` renders the result as the order history list (each
+  order's `items`, `total_amount`, `timestamp`).
+- `GET /orders/{order_id}/invoice` — same auth. Not called from anywhere
+  yet; would return a PDF (raw bytes, not JSON) if wired up.
 
-`GET /api/balance` and `POST /api/buy` (`src/app/api/balance/route.js`,
-`src/app/api/buy/route.js`) exist as their own routes, not direct calls
-from client code, purely so `EXTERNAL_API_KEY` stays server-side — the
+`GET /api/balance`, `POST /api/buy`, and `GET /api/order-history`
+(`src/app/api/{balance,buy,order-history}/route.js`) exist as their own
+routes, not direct calls from client code, purely so `EXTERNAL_API_KEY`
+stays server-side — the
 pages/components calling them are Client Components (need `useAuth`), and
-client code can't read non-`NEXT_PUBLIC_` env vars. Both first check the
-caller has a valid Supabase session (mirroring `/api/orders`'s pattern)
-before calling the external API — neither call is actually
-per-Supabase-account (there's only one `EXTERNAL_API_USER_ID` configured
-for this whole app), but there's no reason to let either route be hit by
-random unauthenticated requests either. `POST /api/buy` maps the external
+client code can't read non-`NEXT_PUBLIC_` env vars. All three first check
+the caller has a valid Supabase session (mirroring `/api/orders`'s
+pattern) before calling the external API — none of these calls are
+actually per-Supabase-account (there's only one `EXTERNAL_API_USER_ID`
+configured for this whole app), but there's no reason to let any of them
+be hit by random unauthenticated requests either. `POST /api/buy` maps the external
 API's error codes to plain-language messages: 402 → "Insufficient
 balance...", 404 → "This item is no longer available.", 429 →
 rate-limited (echoes back the `Retry-After` seconds if the API sent one).
@@ -247,11 +257,12 @@ my-furniture-buyer-app/
     app/
       page.js                 # homepage: live product listing + Buy button (Level 2, external API)
       login/page.js           # login / signup form
-      orders/page.js          # order history + real balance from the external API (requires login)
-      api/orders/route.js     # POST: server-side budget check + order insert (unreachable from UI right now)
+      orders/page.js          # real balance + real order history, both from the external API (requires login)
+      api/orders/route.js     # POST: Supabase-backed order system; dead code, nothing calls it
       api/signup/route.js     # POST: creates a Supabase user already-confirmed
       api/balance/route.js    # GET: proxies GET /users/{id} on the external API
       api/buy/route.js        # POST: proxies POST /orders on the external API
+      api/order-history/route.js  # GET: proxies GET /orders/{user_id} on the external API
       layout.js               # wraps everything in <AuthProvider> + <Navbar>
     components/
       Navbar.js
