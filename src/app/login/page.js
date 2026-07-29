@@ -29,7 +29,7 @@ export default function LoginPage() {
         setError(error.message);
         return;
       }
-      router.push("/catalogue");
+      router.push("/");
     } else {
       const { error } = await supabase.auth.signUp({ email, password });
       setSubmitting(false);
