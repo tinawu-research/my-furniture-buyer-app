@@ -1,26 +1,137 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --pink: #ff8fc4;
+  --pink-dark: #f2529c;
+  --pink-light: #ffe1f0;
+  --pink-pale: #fff0f8;
+  --ink: #1a1420;
+  --ink-soft: #4a3f52;
+  --purple: #3d1f4d;
+
+  --background: var(--pink-pale);
+  --foreground: var(--ink);
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  --font-sans: var(--font-body);
+  --font-heading: var(--font-heading);
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-body), Arial, Helvetica, sans-serif;
+  background-image:
+    radial-gradient(circle at 20% 10%, rgba(255, 143, 196, 0.25) 0, transparent 45%),
+    radial-gradient(circle at 85% 25%, rgba(61, 31, 77, 0.12) 0, transparent 40%),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120' viewBox='0 0 120 120'%3E%3Cg fill='%23f2529c' fill-opacity='0.09'%3E%3Cpath d='M20 14c4-6 12-6 14 0 2-6 10-6 14 0 3 5-3 10-14 18-11-8-17-13-14-18z'/%3E%3Cpath d='M78 70l4 4 4-4 4 4-4 4 4 4-4 4-4-4-4 4-4-4 4-4-4-4z'/%3E%3C/g%3E%3C/svg%3E");
+  background-attachment: fixed;
+  min-height: 100%;
+}
+
+h1, h2, h3, h4 {
+  font-family: var(--font-heading), var(--font-body), sans-serif;
+}
+
+::selection {
+  background: var(--pink-dark);
+  color: white;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: var(--pink-light);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--pink-dark);
+  border-radius: 999px;
+  border: 2px solid var(--pink-light);
+}
+
+/* Sticker-style card: bold border + offset shadow, like a Kuromi enamel pin */
+.kuromi-card {
+  background: white;
+  border: 2.5px solid var(--ink);
+  border-radius: 1.25rem;
+  box-shadow: 4px 4px 0 var(--ink);
+}
+
+.kuromi-card-pink {
+  background: var(--pink-light);
+  border: 2.5px solid var(--ink);
+  border-radius: 1.25rem;
+  box-shadow: 4px 4px 0 var(--ink);
+}
+
+.kuromi-btn {
+  font-family: var(--font-heading), sans-serif;
+  border: 2.5px solid var(--ink);
+  border-radius: 999px;
+  font-weight: 700;
+  transition: transform 0.12s ease, background 0.12s ease, color 0.12s ease;
+}
+.kuromi-btn:active:not(:disabled) {
+  transform: translate(2px, 2px);
+}
+
+.kuromi-btn-primary {
+  background: var(--ink);
+  color: var(--pink);
+  box-shadow: 3px 3px 0 var(--pink-dark);
+}
+.kuromi-btn-primary:hover:not(:disabled) {
+  background: var(--purple);
+}
+.kuromi-btn-primary:active:not(:disabled) {
+  box-shadow: 1px 1px 0 var(--pink-dark);
+}
+
+.kuromi-btn-secondary {
+  background: var(--pink-light);
+  color: var(--ink);
+  box-shadow: 3px 3px 0 var(--ink);
+}
+.kuromi-btn-secondary:hover:not(:disabled) {
+  background: white;
+}
+.kuromi-btn-secondary:active:not(:disabled) {
+  box-shadow: 1px 1px 0 var(--ink);
+}
+
+.kuromi-input {
+  border: 2px solid var(--ink);
+  border-radius: 0.9rem;
+  background: white;
+}
+.kuromi-input:focus {
+  outline: none;
+  border-color: var(--pink-dark);
+  box-shadow: 0 0 0 3px rgba(242, 82, 156, 0.25);
+}
+
+.kuromi-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  background: var(--ink);
+  color: var(--pink);
+  font-family: var(--font-heading), sans-serif;
+  font-weight: 700;
+  font-size: 0.7rem;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  padding: 0.15rem 0.6rem;
+  border-radius: 999px;
+}
+
+.kuromi-price {
+  font-family: var(--font-heading), sans-serif;
+  color: var(--pink-dark);
+  -webkit-text-stroke: 0.4px var(--ink);
 }

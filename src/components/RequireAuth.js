@@ -15,7 +15,7 @@ export default function RequireAuth({ children }) {
   }, [loading, user, router]);
 
   if (loading || !user) {
-    return <p className="p-6 text-gray-500">Loading...</p>;
+    return <p className="p-6 text-[var(--ink-soft)] font-bold">Loading... 🎀</p>;
   }
 
   return children;

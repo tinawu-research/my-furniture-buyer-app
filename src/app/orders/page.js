@@ -50,20 +50,24 @@ function OrdersContent() {
     loadData();
   }, [loadData]);
 
-  if (loading) return <p className="p-6 text-gray-500">Loading orders...</p>;
+  if (loading) return <p className="p-6 text-[var(--ink-soft)] font-bold">Loading orders... 🎀</p>;
 
   const spent = orders.reduce((sum, o) => sum + Number(o.total_amount), 0);
 
   return (
     <div className="max-w-3xl mx-auto px-6 py-8">
-      <h1 className="text-2xl font-bold mb-4">My Orders</h1>
+      <h1 className="font-heading text-3xl font-extrabold mb-4">
+        My Orders <span aria-hidden>💀</span>
+      </h1>
 
-      <div className="border rounded-lg p-4 mb-6">
-        <span className="text-gray-500 text-sm">Balance (from the furniture shop&apos;s API)</span>
+      <div className="kuromi-card p-4 mb-6">
+        <span className="text-[var(--ink-soft)] text-sm font-bold">
+          Balance (from the furniture shop&apos;s API)
+        </span>
         {balanceError ? (
-          <p className="text-red-600 mt-1">{balanceError}</p>
+          <p className="text-[var(--pink-dark)] font-bold mt-1">{balanceError}</p>
         ) : (
-          <p className="text-xl font-semibold mt-1">
+          <p className="kuromi-price text-2xl font-extrabold mt-1">
             $
             {balance.toLocaleString(undefined, {
               minimumFractionDigits: 2,
@@ -74,13 +78,13 @@ function OrdersContent() {
       </div>
 
       {ordersError ? (
-        <p className="text-red-600 mb-6">{ordersError}</p>
+        <p className="text-[var(--pink-dark)] font-bold mb-6">{ordersError}</p>
       ) : (
-        <div className="flex items-baseline justify-between mb-6">
-          <span className="text-gray-500">
+        <div className="kuromi-card-pink flex items-baseline justify-between mb-6 px-4 py-3">
+          <span className="text-[var(--ink-soft)] font-bold">
             {`Total spent across ${orders.length} order${orders.length === 1 ? "" : "s"}`}
           </span>
-          <span className="text-xl font-semibold">
+          <span className="kuromi-price text-xl font-extrabold">
             $
             {spent.toLocaleString(undefined, {
               minimumFractionDigits: 2,
@@ -90,14 +94,16 @@ function OrdersContent() {
         </div>
       )}
 
-      {!ordersError && orders.length === 0 && <p className="text-gray-500">No orders yet.</p>}
+      {!ordersError && orders.length === 0 && (
+        <p className="text-[var(--ink-soft)] font-bold">No orders yet.</p>
+      )}
 
       <div className="flex flex-col gap-4">
         {orders.map((order) => (
-          <div key={order.order_id} className="border rounded-lg p-4">
-            <div className="flex justify-between text-sm text-gray-500 mb-2">
+          <div key={order.order_id} className="kuromi-card p-4">
+            <div className="flex justify-between text-sm text-[var(--ink-soft)] mb-2">
               <span>{new Date(order.timestamp).toLocaleString()}</span>
-              <span className="font-medium text-black">
+              <span className="kuromi-price font-extrabold">
                 ${Number(order.total_amount).toFixed(2)}
               </span>
             </div>

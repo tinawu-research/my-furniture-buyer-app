@@ -28,13 +28,15 @@ export default async function Home() {
 
   return (
     <div className="max-w-5xl mx-auto px-6 py-8">
-      <h1 className="text-2xl font-bold mb-1">Furniture Catalogue</h1>
-      <p className="text-gray-500 mb-6">
+      <h1 className="font-heading text-3xl font-extrabold mb-1">
+        Furniture Catalogue <span aria-hidden>👑</span>
+      </h1>
+      <p className="text-[var(--ink-soft)] mb-6">
         {products.length} products from the shop&apos;s live catalogue API.
       </p>
 
       {error && (
-        <p className="text-red-600 mb-4">
+        <p className="kuromi-card-pink px-4 py-3 mb-4 text-[var(--pink-dark)] font-bold">
           Couldn&apos;t load the catalogue ({error}). Try refreshing the page.
         </p>
       )}
@@ -43,12 +45,12 @@ export default async function Home() {
 
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
         {products.map((product) => (
-          <div key={product.item_id} className="border rounded-lg p-4 flex flex-col gap-1">
-            <span className="text-xs uppercase tracking-wide text-gray-500">
-              {product.category}
-            </span>
-            <h3 className="font-semibold">{product.product_name}</h3>
-            <p className="font-medium mb-2">${Number(product.price).toFixed(2)}</p>
+          <div key={product.item_id} className="kuromi-card p-4 flex flex-col gap-1.5">
+            <span className="kuromi-badge w-fit">{product.category}</span>
+            <h3 className="font-heading font-bold leading-snug">{product.product_name}</h3>
+            <p className="kuromi-price font-extrabold text-lg mb-1">
+              ${Number(product.price).toFixed(2)}
+            </p>
             <BuyButton itemId={product.item_id} />
           </div>
         ))}

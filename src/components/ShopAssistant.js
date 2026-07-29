@@ -15,8 +15,8 @@ export default function ShopAssistant() {
 
   if (!user) {
     return (
-      <div className="border rounded-lg p-4 mb-8 text-sm text-gray-600">
-        <Link href="/login" className="underline font-medium">
+      <div className="kuromi-card-pink p-4 mb-8 text-sm text-[var(--ink-soft)]">
+        <Link href="/login" className="underline font-bold text-[var(--pink-dark)]">
           Log in
         </Link>{" "}
         to ask the shopping assistant a question.
@@ -109,25 +109,29 @@ export default function ShopAssistant() {
   }
 
   return (
-    <div className="border rounded-lg p-4 mb-8">
-      <h2 className="font-semibold mb-1">Ask the shopping assistant</h2>
-      <p className="text-sm text-gray-500 mb-3">
+    <div className="kuromi-card p-4 mb-8">
+      <h2 className="font-heading font-bold text-lg mb-1">
+        Ask the shopping assistant <span aria-hidden>🎀</span>
+      </h2>
+      <p className="text-sm text-[var(--ink-soft)] mb-3">
         e.g. &quot;find me a cheap chair&quot; or &quot;anything in blue under $100?&quot;
       </p>
 
       {messages.length > 0 && (
-        <div className="flex flex-col gap-3 mb-3 max-h-80 overflow-y-auto">
+        <div className="flex flex-col gap-3 mb-3 max-h-80 overflow-y-auto pr-1">
           {messages.map((m, i) => (
             <div key={i} className={m.role === "user" ? "text-right" : "text-left"}>
               <p
-                className={`inline-block rounded-lg px-3 py-2 text-sm max-w-[85%] whitespace-pre-wrap ${
-                  m.role === "user" ? "bg-black text-white" : "bg-gray-100"
+                className={`inline-block rounded-2xl px-3 py-2 text-sm max-w-[85%] whitespace-pre-wrap border-2 border-[var(--ink)] ${
+                  m.role === "user"
+                    ? "bg-[var(--ink)] text-[var(--pink)]"
+                    : "bg-[var(--pink-light)] text-[var(--ink)]"
                 }`}
               >
                 {m.text}
               </p>
               {m.toolCalls?.length > 0 && (
-                <p className="text-xs text-gray-400 mt-1">
+                <p className="text-xs text-[var(--ink-soft)]/70 mt-1">
                   used: {m.toolCalls.map((t) => t.name).join(", ")}
                 </p>
               )}
@@ -137,12 +141,12 @@ export default function ShopAssistant() {
       )}
 
       {pendingOrder && (
-        <div className="border border-black rounded-lg p-3 mb-3 text-sm">
+        <div className="kuromi-card-pink p-3 mb-3 text-sm">
           <p className="mb-2">
-            Confirm purchase: <span className="font-medium">{pendingOrder.quantity}&times; {pendingOrder.name}</span>{" "}
-            for <span className="font-medium">${Number(pendingOrder.total).toFixed(2)}</span>?
+            Confirm purchase: <span className="font-bold">{pendingOrder.quantity}&times; {pendingOrder.name}</span>{" "}
+            for <span className="kuromi-price font-extrabold">${Number(pendingOrder.total).toFixed(2)}</span>?
           </p>
-          <p className="text-xs text-gray-500 mb-2">
+          <p className="text-xs text-[var(--ink-soft)] mb-2">
             This charges your account immediately and cannot be undone.
           </p>
           <div className="flex gap-2">
@@ -150,15 +154,15 @@ export default function ShopAssistant() {
               type="button"
               onClick={handleConfirmOrder}
               disabled={confirming}
-              className="rounded bg-black text-white px-3 py-1.5 text-sm hover:bg-gray-800 disabled:opacity-50"
+              className="kuromi-btn kuromi-btn-primary px-3 py-1.5 text-sm disabled:opacity-50"
             >
-              {confirming ? "Placing order..." : "Confirm purchase"}
+              {confirming ? "Placing order..." : "Confirm purchase 🎀"}
             </button>
             <button
               type="button"
               onClick={handleCancelOrder}
               disabled={confirming}
-              className="rounded border px-3 py-1.5 text-sm hover:bg-gray-50 disabled:opacity-50"
+              className="kuromi-btn kuromi-btn-secondary px-3 py-1.5 text-sm disabled:opacity-50"
             >
               Cancel
             </button>
@@ -166,20 +170,20 @@ export default function ShopAssistant() {
         </div>
       )}
 
-      {error && <p className="text-red-600 text-sm mb-2">{error}</p>}
+      {error && <p className="text-[var(--pink-dark)] text-sm mb-2 font-bold">{error}</p>}
 
       <form onSubmit={handleSubmit} className="flex gap-2">
         <input
           value={input}
           onChange={(e) => setInput(e.target.value)}
           placeholder="Ask me anything about the catalogue..."
-          className="flex-1 border rounded px-3 py-2 text-sm"
+          className="kuromi-input flex-1 px-3 py-2 text-sm"
           disabled={loading}
         />
         <button
           type="submit"
           disabled={loading || !input.trim()}
-          className="rounded bg-black text-white px-4 py-2 text-sm hover:bg-gray-800 disabled:opacity-50"
+          className="kuromi-btn kuromi-btn-primary px-4 py-2 text-sm disabled:opacity-50"
         >
           {loading ? "Thinking..." : "Ask"}
         </button>

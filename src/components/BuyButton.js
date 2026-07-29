@@ -41,7 +41,7 @@ export default function BuyButton({ itemId }) {
 
   if (!user) {
     return (
-      <Link href="/login" className="text-sm underline text-gray-600">
+      <Link href="/login" className="text-sm underline text-[var(--ink-soft)]">
         Log in to buy
       </Link>
     );
@@ -49,8 +49,8 @@ export default function BuyButton({ itemId }) {
 
   if (state === "done" && result) {
     return (
-      <div className="text-sm text-green-700">
-        <p>Ordered! #{result.order_id}</p>
+      <div className="text-sm font-bold text-[var(--pink-dark)]">
+        <p>Ordered! 🎀 #{result.order_id}</p>
         <p>Charged ${Number(result.total_price).toFixed(2)}</p>
         <p>New balance: ${Number(result.remaining_balance).toFixed(2)}</p>
       </div>
@@ -62,11 +62,11 @@ export default function BuyButton({ itemId }) {
       <button
         onClick={handleBuy}
         disabled={state === "buying"}
-        className="rounded bg-black text-white px-3 py-1 text-sm hover:bg-gray-800 disabled:opacity-50"
+        className="kuromi-btn kuromi-btn-primary px-3 py-1 text-sm disabled:opacity-50"
       >
         {state === "buying" ? "Placing order..." : "Buy"}
       </button>
-      {error && <p className="text-red-600 text-xs mt-1">{error}</p>}
+      {error && <p className="text-[var(--pink-dark)] text-xs mt-1 font-bold">{error}</p>}
     </div>
   );
 }
