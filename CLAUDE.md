@@ -264,22 +264,40 @@ The system prompt in `azureAgent.js` tells the model outright that
 `search_catalogue` only filters by exact category — no price/colour/
 keyword support — and that for anything needing judgement it should fetch
 a wide `search_catalogue` result (raise `limit`) and reason over the
-returned fields itself. It's also told `place_order` is real, immediate,
-and irreversible, and to only call it on an explicit, unambiguous
-purchase instruction — otherwise describe findings and ask first.
-`get_product`'s tool result has its embedded base64 image stripped before
-it ever reaches the model (nothing in a text-only tool-result channel can
-use raw image bytes; sending them would just burn tokens).
+returned fields itself. It's also told to only call `place_order` on an
+explicit, unambiguous purchase instruction — otherwise describe findings
+and ask first. `get_product`'s tool result has its embedded base64 image
+stripped before it ever reaches the model (nothing in a text-only
+tool-result channel can use raw image bytes; sending them would just burn
+tokens).
 
-Verified all four tools for real against the live API and account: asked
-it to find the cheapest chair — it fetched the whole "Chairs" category
-(`limit: 200`) and picked the actual lowest price itself, then correctly
-did **not** order it (only asked to "find", not "buy"); asked for the
-real balance — it called `check_balance` and returned the exact figure;
-asked for white beds — it fetched "Beds" broadly and filtered by colour
-itself; then gave it an explicit purchase instruction for the same $6
-item — it called `place_order` and the account's real balance dropped by
-exactly $6.
+**`place_order` never executes a real purchase itself — it stages one for
+the user to confirm.** This is a structural interception, not just a
+prompt instruction: `place_order` is special-cased in the tool-call loop
+in `runShopAssistant()` rather than dispatched through the generic
+`TOOL_IMPLEMENTATIONS` table. When called, it looks up the product via
+`getProduct()` for an authoritative name/price, computes the total, sets
+it as `pendingOrder`, and returns the model an `awaiting_confirmation`
+tool result explicitly telling it not to claim the purchase is complete.
+`runShopAssistant()` returns `pendingOrder` alongside `reply`/`toolCalls`.
+`ShopAssistant.js` renders a confirmation card (item, quantity, total)
+with Confirm/Cancel buttons whenever a response includes a `pendingOrder`;
+**Confirm calls `POST /api/buy` directly** (the same already-tested route
+used elsewhere) rather than looping back through the LLM, so the real
+charge only ever happens on an explicit user click, never as a
+side-effect of the model's own output. Cancel just clears the state and
+appends a "Order cancelled." message — no API call.
+
+Verified end-to-end against the live API and account (disposable test
+user, deleted after): asked it to find the cheapest chair and buy 1 — it
+fetched the "Chairs" category, picked the actual cheapest item ($6,
+Children's stool), and staged it as a `pendingOrder` without charging
+anything (balance confirmed unchanged via `check_balance` immediately
+after the agent's response); clicking Confirm then called `/api/buy` and
+the real balance dropped by exactly $6. Also previously verified (before
+this confirmation step was added) that it correctly judged "find the
+cheapest chair" without a buy instruction as browse-only, checked the
+real account balance, and filtered "white beds" by colour itself.
 
 ## Catalogue data source (Supabase's own copy — separate from the above)
 

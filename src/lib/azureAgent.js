@@ -8,18 +8,18 @@
 // directly against the endpoint). "low" effort plus a few thousand tokens
 // is comfortably enough for this assistant's tasks.
 
-import { searchCatalogue, getProduct, checkBalance, placeOrder } from "@/lib/externalApi";
+import { searchCatalogue, getProduct, checkBalance } from "@/lib/externalApi";
 
 const SYSTEM_PROMPT = `You are a shopping assistant for a furniture shop. You have four tools, each calling a real external API:
 
 - search_catalogue: lists products, filterable ONLY by an exact category name, with limit/skip pagination. The API itself has no price range, colour, or keyword/text search.
 - get_product: full detail for one specific item you already have the item_id for (from a prior search_catalogue call). Not for browsing.
 - check_balance: the user's real, current account balance. A snapshot number only, no transaction history.
-- place_order: places a REAL, IMMEDIATE, IRREVERSIBLE purchase for one item_id and quantity, charging the account right away. There is no preview/quote and no cancel/refund endpoint.
+- place_order: stages a proposed purchase (item_id + quantity) for the user to confirm — it does NOT charge anything by itself. Once the user confirms (through a UI button, not by replying to you), the purchase executes immediately and cannot be undone.
 
 When a request needs judgement the API can't do itself — "cheap", a colour, a vibe, "under $X" — fetch a reasonably wide set of plain results yourself via search_catalogue (raise limit if needed) and apply that judgement over the returned fields (price, colours, product_name, category) yourself. Never assume the API understands these concepts; it only filters by exact category name.
 
-Only call place_order when the user has given an explicit, unambiguous instruction to buy/order/purchase a specific item. For browsing, comparisons, or recommendations, describe what you found instead — ask before ordering if it's at all ambiguous whether they want to buy.
+Only call place_order when the user has given an explicit, unambiguous instruction to buy/order/purchase a specific item. For browsing, comparisons, or recommendations, describe what you found instead. After calling place_order, its result tells you the exact item, quantity, and total price being proposed — state those clearly and tell the user a confirmation button will appear; do not say the purchase is complete, since it isn't yet.
 
 Prices are in dollars. Be concise and conversational — this is a chat reply, not a report.`;
 
@@ -73,7 +73,7 @@ const TOOLS = [
     function: {
       name: "place_order",
       description:
-        "Place a REAL, IMMEDIATE, IRREVERSIBLE order for one item_id and quantity. Only call this on an explicit purchase instruction.",
+        "Stage a proposed order for one item_id and quantity for the user to review and confirm. Does NOT charge anything itself. Only call this on an explicit purchase instruction.",
       parameters: {
         type: "object",
         properties: {
@@ -86,12 +86,15 @@ const TOOLS = [
   },
 ];
 
+// place_order is special-cased in the loop below, not dispatched generically —
+// it never executes a real purchase itself; it only stages one for the user
+// to confirm via a UI button (see ShopAssistant.js), which calls /api/buy
+// directly.
 const TOOL_IMPLEMENTATIONS = {
   search_catalogue: (input) =>
     searchCatalogue({ category: input.category, limit: input.limit, skip: input.skip }),
   get_product: (input) => getProduct(input.item_id),
   check_balance: () => checkBalance(),
-  place_order: (input) => placeOrder({ itemId: input.item_id, quantity: input.quantity }),
 };
 
 const MAX_TURNS = 8;
@@ -116,6 +119,7 @@ export async function runShopAssistant(userMessage) {
   ];
 
   const toolCalls = [];
+  let pendingOrder = null;
 
   for (let turn = 0; turn < MAX_TURNS; turn++) {
     let data;
@@ -169,12 +173,38 @@ export async function runShopAssistant(userMessage) {
 
         let resultContent;
         try {
-          const impl = TOOL_IMPLEMENTATIONS[call.function.name];
-          const result = impl
-            ? await impl(input)
-            : { error: `Unknown tool: ${call.function.name}` };
-          resultContent = JSON.stringify(result);
-          toolCalls.push({ name: call.function.name, input, ok: true });
+          if (call.function.name === "place_order") {
+            const product = await getProduct(input.item_id);
+            const quantity = input.quantity ?? 1;
+            const unitPrice = Number(product.price);
+            const total = unitPrice * quantity;
+
+            pendingOrder = {
+              item_id: input.item_id,
+              name: product.product_name,
+              unit_price: unitPrice,
+              quantity,
+              total,
+            };
+
+            resultContent = JSON.stringify({
+              status: "awaiting_confirmation",
+              item_id: input.item_id,
+              name: product.product_name,
+              unit_price: unitPrice,
+              quantity,
+              total,
+              note: "This has NOT been purchased yet. Tell the user exactly what you're about to buy, the quantity, and the total price, and that a confirmation button will appear for them to approve the charge. Do not say the order is placed.",
+            });
+            toolCalls.push({ name: "place_order", input, ok: true, pending: true });
+          } else {
+            const impl = TOOL_IMPLEMENTATIONS[call.function.name];
+            const result = impl
+              ? await impl(input)
+              : { error: `Unknown tool: ${call.function.name}` };
+            resultContent = JSON.stringify(result);
+            toolCalls.push({ name: call.function.name, input, ok: true });
+          }
         } catch (toolErr) {
           resultContent = JSON.stringify({ error: toolErr.message });
           toolCalls.push({ name: call.function.name, input, ok: false, error: toolErr.message });
@@ -185,12 +215,13 @@ export async function runShopAssistant(userMessage) {
       continue;
     }
 
-    return { reply: message.content ?? "", toolCalls };
+    return { reply: message.content ?? "", toolCalls, pendingOrder };
   }
 
   return {
     reply:
       "I wasn't able to finish that within the allotted steps — try rephrasing or breaking it into a simpler request.",
     toolCalls,
+    pendingOrder,
   };
 }
