@@ -86,14 +86,21 @@ create policy "Users can insert items into their own orders"
   );
 
 -- Automatically create a profile (with a starting budget) whenever someone signs up.
+-- search_path is pinned to public because this trigger runs under the auth
+-- service's role, whose default search_path doesn't include it — without
+-- this, "profiles" below can't be found and every signup fails.
 create or replace function handle_new_user()
-returns trigger as $$
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
 begin
-  insert into profiles (id, email, budget)
+  insert into public.profiles (id, email, budget)
   values (new.id, new.email, 1000);
   return new;
 end;
-$$ language plpgsql security definer;
+$$;
 
 drop trigger if exists on_auth_user_created on auth.users;
 create trigger on_auth_user_created
